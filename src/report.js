@@ -3,6 +3,8 @@
 // Includes Visibility.so promotion (banner + CTA) with UTM-tagged links.
 // An optional `brand` from the user's config appears in the header.
 
+import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
+
 const UTM = "utm_source=do-audit&utm_medium=report&utm_campaign=oss-cli";
 const V_HOME = `https://visibility.so/?${UTM}`;
 const V_REG = `https://app.visibility.so/register?${UTM}`;
@@ -29,7 +31,7 @@ function issueCard(x, showPage) {
     `<li><a href="${esc(u.startsWith("http") ? u : "https://" + u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`).join("");
   let ev = "";
   if (x.evidence) {
-    const i = x.evidence.indexOf("http");
+    const i = x.evidence.search(/https?:\/\//);
     ev = i >= 0
       ? `<span class="proof">${esc(x.evidence.slice(0, i).trim())} <a href="${esc(x.evidence.slice(i).trim())}" target="_blank" rel="noopener">view proof ↗</a></span>`
       : `<span class="proof">${esc(x.evidence)}</span>`;
@@ -79,7 +81,9 @@ function table(headers, rows, numCols = []) {
 }
 
 export function renderReport(cfg, d) {
-  const a = d.analysis || {}, brief = d.brief || {};
+  // Normalizing here too keeps the renderer safe even when called directly
+  // (e.g. from a saved --json dump) with un-normalized model output.
+  const a = normalizeAnalysis(d.analysis || {}), brief = normalizeBrief(d.brief || {});
   const site = d.domain, today = d.date;
   const brand = cfg.brand || "";
   const counts = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -107,9 +111,9 @@ export function renderReport(cfg, d) {
   const sections = [];
   sections.push(sec("summary", "Executive Summary",
     `<h2>Executive Summary</h2><p class="lead">${esc(a.executive_summary || "")}</p>
-    ${(a.top_issues || a.quick_wins) ? `<div class="two-col">
-      ${a.top_issues ? `<div class="panel"><h3>Top Priority Issues</h3><ol>${a.top_issues.map((t) => `<li>${esc(asText(t))}</li>`).join("")}</ol></div>` : ""}
-      ${a.quick_wins ? `<div class="panel"><h3>Quick Wins</h3><ol>${a.quick_wins.map((t) => `<li>${esc(asText(t))}</li>`).join("")}</ol></div>` : ""}
+    ${(a.top_issues.length || a.quick_wins.length) ? `<div class="two-col">
+      ${a.top_issues.length ? `<div class="panel"><h3>Top Priority Issues</h3><ol>${a.top_issues.map((t) => `<li>${esc(asText(t))}</li>`).join("")}</ol></div>` : ""}
+      ${a.quick_wins.length ? `<div class="panel"><h3>Quick Wins</h3><ol>${a.quick_wins.map((t) => `<li>${esc(asText(t))}</li>`).join("")}</ol></div>` : ""}
     </div>` : ""}`));
 
   let cwv = "";

@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { fetchPage, techCheck, psi, ahrefsDR } from "./crawl.js";
 import * as dfs from "./dataforseo.js";
 import { understand, strategy, analyze } from "./analyze.js";
+import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
 import { visibilityTests, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
 import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
@@ -96,8 +97,8 @@ export async function runAudit(cfg, domain, opts = {}) {
     business: d.brief.business_summary, brand: d.brief.brand_name,
     market: d.market, ranked: d.ranked, candidates: d.compCandidates, hasData: hasDFS,
   });
-  d.brief = { ...d.brief, ...strat,
-    assumptions: [...(d.brief.assumptions || []), ...(strat.assumptions || [])] };
+  d.brief = normalizeBrief({ ...d.brief, ...strat,
+    assumptions: [...(d.brief.assumptions || []), ...(strat.assumptions || [])] });
   sp.ok(`${(d.brief.shortlist || []).length} shortlist keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
 
   // 6 — live SERP checks for the FULL shortlist
@@ -157,7 +158,7 @@ export async function runAudit(cfg, domain, opts = {}) {
 
   // 10 — analysis
   sp.start("Writing the audit (AI analysis — this can take a minute)…");
-  d.analysis = await analyze(cfg, {
+  d.analysis = normalizeAnalysis(await analyze(cfg, {
     domain, business: d.brief.business_summary, target_market: d.market,
     tech: d.tech, homepage: d.home, pages: d.pages, psi: d.psi,
     shortlist: d.brief.shortlist, serp: d.serpResults,
@@ -167,7 +168,7 @@ export async function runAudit(cfg, domain, opts = {}) {
     ai_responses: d.aiResults.map((r) => ({ platform: r.platform, prompt: r.prompt,
       excerpt: r.excerpt })),
     prior_assumptions: d.brief.assumptions || [],
-  });
+  }));
   sp.ok(`Analysis complete — health score ${d.analysis.score ?? "?"}/100`);
 
   // 11 — report
