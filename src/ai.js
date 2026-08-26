@@ -40,7 +40,7 @@ const modelFor = (cfg, id) => cfg.models?.[id] || PROVIDERS[id].model;
 // grounding, OpenRouter :online, xAI Live Search; Perplexity always searches).
 // This matters for AI-visibility testing: without search, models can only
 // mention brands they memorized in training.
-export async function chat(cfg, id, system, user, { maxTokens = 1200, json = false, web = false } = {}) {
+export async function chat(cfg, id, system, user, { maxTokens = 1200, json = false, web = false, temperature } = {}) {
   const p = PROVIDERS[id];
   if (!p) throw new Error(`Unknown provider: ${id}`);
   const key = cfg.keys?.[p.keyName];
@@ -53,6 +53,7 @@ export async function chat(cfg, id, system, user, { maxTokens = 1200, json = fal
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({ model, max_tokens: maxTokens, system,
         messages: [{ role: "user", content: user }],
+        ...(temperature != null ? { temperature } : {}),
         ...(web ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}) }),
     });
     if (!res.ok) throw new Error(`${p.label} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -75,6 +76,7 @@ export async function chat(cfg, id, system, user, { maxTokens = 1200, json = fal
           systemInstruction: { parts: [{ text: system }] },
           ...(web ? { tools: [{ google_search: {} }] } : {}),
           generationConfig: { maxOutputTokens: maxTokens,
+            ...(temperature != null ? { temperature } : {}),
             ...(json && !web ? { responseMimeType: "application/json" } : {}) },
         }),
       });
@@ -102,6 +104,8 @@ export async function chat(cfg, id, system, user, { maxTokens = 1200, json = fal
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
       max_tokens: maxTokens,
+      // Search-preview models reject temperature; only send it off-web.
+      ...(temperature != null && !web ? { temperature } : {}),
       ...(web && id === "openai" ? { web_search_options: {} } : {}),
       ...(web && id === "xai" ? { search_parameters: { mode: "auto", return_citations: true } } : {}),
       ...(json && p.jsonMode !== false && !web ? { response_format: { type: "json_object" } } : {}),
@@ -165,10 +169,17 @@ export async function chatJSON(cfg, system, user, maxTokens = 6000) {
     ? cfg.analysisProvider : configuredProviders(cfg)[0];
   if (!id) throw new Error("No AI provider configured. Run: do-audit init");
   let lastErr;
+  // Mirrors the agent's deepseekJSON: transient API failures count as a
+  // retriable attempt (not a fatal error), the retry gets 1.5x the token
+  // budget for truncation headroom, and temperature drops 0.4 -> 0.2.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { text } = await chat(cfg, id,
-      system + " Output ONLY a single valid JSON object — no markdown, no commentary.",
-      user, { maxTokens: attempt === 0 ? maxTokens : Math.round(maxTokens * 1.5), json: true });
+    let text;
+    try {
+      ({ text } = await chat(cfg, id,
+        system + " Output ONLY a single valid JSON object — no markdown, no commentary.",
+        user, { maxTokens: attempt === 0 ? maxTokens : Math.round(maxTokens * 1.5),
+          json: true, temperature: attempt === 0 ? 0.4 : 0.2 }));
+    } catch (e) { lastErr = e; continue; }
     try { return JSON.parse(text); } catch {}
     const m = text.match(/\{[\s\S]*\}/);
     if (m) { try { return JSON.parse(m[0]); } catch {} }
