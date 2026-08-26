@@ -87,7 +87,11 @@ export async function serp(cfg, keyword, loc, lang, depth = 20) {
   const aiDomains = new Set();
   for (const it of items) {
     if (it.type === "organic") {
-      organic.push({ pos: it.rank_absolute, domain: it.domain, url: it.url });
+      // pos = rank among the ORGANIC results (what "ranking #3" means to a
+      // client); rank_absolute counts SERP features too, so it is kept
+      // separately rather than used as the headline number.
+      organic.push({ pos: it.rank_group ?? organic.length + 1,
+                     absPos: it.rank_absolute, domain: it.domain, url: it.url });
     } else if (it.type === "ai_overview") {
       for (const ref of it.references || []) if (ref.domain) aiDomains.add(ref.domain);
       for (const sub of it.items || [])

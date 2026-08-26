@@ -92,6 +92,70 @@ do-audit config path           # print the config file location
 | `--market <ISO>` | Target market, e.g. `US`, `GB`, `IN` (default: auto-detected from the site) |
 | `--pages <n>` | Extra internal pages to crawl (default 4) |
 | `--json` | Also write all collected raw data as JSON |
+| `--agent` | Machine mode — audit JSON on stdout, progress on stderr, no files, never prompts |
+| `--full` | With `--agent`, also include the complete raw data set under `raw` |
+
+## Use it from Claude Code (or any AI agent)
+
+`--agent` turns do-audit into a tool an AI agent can call: **stdout carries nothing but JSON**, every
+progress line goes to stderr, no files are written, nothing ever prompts, and the exit code is
+non-zero on failure.
+
+```bash
+do-audit example.com --agent            # full audit as JSON on stdout
+do-audit example.com --agent | jq .score
+do-audit example.com --agent --out report.html   # JSON *and* the HTML report
+```
+
+So you can just say:
+
+> *"Run an SEO audit for example.com with do-audit and summarise the report."*
+
+and the agent runs `do-audit example.com --agent`, parses stdout and writes the summary.
+
+The payload is a curated projection built for context windows — raw HTML, internal-link lists and
+full SERP tables are summarized out (add `--full` for everything):
+
+```jsonc
+{
+  "ok": true, "domain": "example.com", "date": "2026-08-27", "score": 71,
+  "executive_summary": "…",
+  "business":        { "brand": "Example", "summary": "…", "market": "US" },
+  "issues":          { "counts": { "critical": 2, "high": 5, "medium": 9, "low": 4, "total": 20 },
+                       "top": ["…"], "quick_wins": ["…"],
+                       "technical": [{ "issue": "…", "severity": "high", "recommendation": "…", "evidence": "…" }],
+                       "onpage":    [{ "issue": "…", "severity": "medium", "page": "/pricing" }] },
+  "recommendations": [{ "priority": "critical", "action": "…", "impact": "…" }],
+  "performance":     { "score": 64, "lcp": "3.1 s", "cls": "0.02", "tbt": "420 ms" },
+  "technical":       { "robots": {…}, "sitemap": {…}, "llms_txt": false, "blocked_ai_bots": ["GPTBot"] },
+  "crawl":           { "pages_crawled": 5, "pages": [{ "url": "…", "title_length": 58, "word_count": 820 }] },
+  "keywords":        [{ "keyword": "…", "volume": 1200, "difficulty": 34, "rank": 12 }],
+  "serps":           [{ "keyword": "…", "has_ai_overview": true, "site_position": 12, "top_3": […] }],
+  "competitors":     { "picked": ["rival.com"], "source": "Google SERPs (DataForSEO)", "profiles": […] },
+  "authority":       { "backlinks": 400, "referring_domains": 60, "domain_rating": 21 },
+  "ai_visibility":   { "visibility_pct": 30, "citation_rate_pct": 10, "per_platform": {…}, "matrix": […] },
+  "summaries":       { "technical": "…", "keyword": "…", "ai": "…" },
+  "assumptions": ["…"], "warnings": ["psi: rate limited"],
+  "data_sources":    { "dataforseo": true, "pagespeed": true, "ahrefs": true }
+}
+```
+
+On failure it prints `{"ok": false, "error": "…"}` and exits 1 — including when no API key is
+configured, so an agent gets a clear message instead of hanging on the onboarding prompt. In CI or
+agent sandboxes, pass the keys as environment variables (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`,
+`DATAFORSEO_KEY`, …) instead of running `do-audit init`.
+
+`warnings` is the honest part of the payload: any step that degraded (missing key, API error) is
+listed there, and the corresponding fields are `null` rather than zero.
+
+### As a library
+
+```js
+import { loadConfig, runAudit, buildSummary } from "do-audit";
+
+const { d, warnings } = await runAudit(loadConfig(), "example.com");
+const summary = buildSummary(d, warnings, { version: "0.10.0" });
+```
 
 ## What the audit covers
 

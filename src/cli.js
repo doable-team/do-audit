@@ -6,7 +6,8 @@ import { loadConfig, loadStored, setConfigValue, CONFIG_PATH } from "./config.js
 import { PROVIDERS, configuredProviders } from "./ai.js";
 import { onboard, maybeOnboard } from "./onboard.js";
 import { runAudit, saveReportFiles, openInBrowser } from "./audit.js";
-import { banner, bold, cyan, gray, green, yellow, maskKey, ask, select, closePrompts } from "./ui.js";
+import { buildSummary } from "./summary.js";
+import { banner, say, setLogSink, bold, cyan, gray, green, yellow, maskKey, ask, select, closePrompts } from "./ui.js";
 
 const VERSION = JSON.parse(fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")).version;
@@ -31,6 +32,10 @@ const HELP = `
     --market <ISO>   Target market, e.g. US, GB, IN (default: auto-detected)
     --pages <n>      Extra internal pages to crawl (default: 4)
     --json           Also write the raw collected data as JSON
+    --agent          Machine mode: print the audit as JSON on stdout, all
+                     progress on stderr, no files, never prompts (for AI
+                     agents and scripts). Exits non-zero on failure.
+    --full           With --agent: include the complete raw data set too
     -v, --version    Print version
     -h, --help       Show this help
 
@@ -38,6 +43,7 @@ const HELP = `
 
     do-audit example.com --open
     do-audit example.com --market GB --json
+    do-audit example.com --agent | jq .score
     npx do-audit example.com
 
   ${gray("Docs & source: https://github.com/doable-team/do-audit")}
@@ -49,6 +55,8 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--open") opts.open = true;
     else if (a === "--json") opts.json = true;
+    else if (a === "--agent") opts.agent = true;
+    else if (a === "--full") opts.full = true;
     else if (a === "--out") opts.out = argv[++i];
     else if (a === "--market") opts.market = argv[++i];
     else if (a === "--pages") opts.pages = parseInt(argv[++i], 10);
@@ -64,10 +72,12 @@ const cleanDomain = (input) =>
 
 export async function run(argv) {
   const opts = parseArgs(argv);
+  // Agent mode: stdout is reserved for the JSON payload from here on.
+  if (opts.agent) setLogSink(process.stderr);
   if (opts.version) { console.log(VERSION); return; }
   const [cmd, ...rest] = opts._;
 
-  if (opts.help || !cmd) { banner(VERSION); console.log(HELP); closePrompts(); return; }
+  if (opts.help || !cmd) { banner(VERSION); say(HELP); closePrompts(); return; }
 
   if (cmd === "init") { banner(VERSION); await onboard(); return; }
 
@@ -86,7 +96,7 @@ export async function run(argv) {
     const { startEditServer } = await import("./editor.js");
     const { url } = await startEditServer(file);
     banner(VERSION);
-    console.log(`  Editing ${cyan(path.basename(file))}
+    say(`  Editing ${cyan(path.basename(file))}
   ${bold("Editor:")}  ${cyan(url + "/edit")}
   ${bold("Preview:")} ${cyan(url + "/")}
   ${gray("Save writes directly to the file; versions are kept in " + path.basename(file) + ".versions/")}
@@ -106,26 +116,26 @@ export async function run(argv) {
       const [key, ...valueParts] = rest.slice(1);
       if (!key) throw new Error("Usage: do-audit config set <key> <value>   (e.g. keys.openai sk-…)");
       setConfigValue(key, valueParts.join(" "));
-      console.log(green(`  ✓ ${key} ${valueParts.length ? "set" : "cleared"}`));
+      say(green(`  ✓ ${key} ${valueParts.length ? "set" : "cleared"}`));
       return;
     }
     banner(VERSION);
     const cfg = loadConfig();
     const stored = loadStored();
-    console.log(`  ${bold("Config")} ${gray(CONFIG_PATH)}\n`);
-    console.log(`  ${bold("AI providers")}`);
+    say(`  ${bold("Config")} ${gray(CONFIG_PATH)}\n`);
+    say(`  ${bold("AI providers")}`);
     for (const [id, p] of Object.entries(PROVIDERS)) {
       const mark = cfg.analysisProvider === id && cfg.keys?.[p.keyName] ? cyan(" ← analysis") : "";
-      console.log(`   ${p.label.padEnd(20)} ${maskKey(cfg.keys?.[p.keyName])}${mark}`);
+      say(`   ${p.label.padEnd(20)} ${maskKey(cfg.keys?.[p.keyName])}${mark}`);
     }
-    console.log(`\n  ${bold("Data sources")}`);
-    console.log(`   ${"DataForSEO".padEnd(20)} ${maskKey(cfg.keys?.dataforseo)}`);
-    console.log(`   ${"Google (PageSpeed)".padEnd(20)} ${maskKey(cfg.keys?.google)}`);
-    console.log(`   ${"Ahrefs".padEnd(20)} ${maskKey(cfg.keys?.ahrefs)}`);
-    console.log(`\n  ${bold("Preferences")}`);
-    console.log(`   ${"Brand".padEnd(20)} ${stored.brand || gray("none")}`);
-    console.log(`   ${"Default market".padEnd(20)} ${stored.market || gray("auto-detect")}`);
-    console.log(`\n  ${gray("Update anything with: do-audit init")}\n`);
+    say(`\n  ${bold("Data sources")}`);
+    say(`   ${"DataForSEO".padEnd(20)} ${maskKey(cfg.keys?.dataforseo)}`);
+    say(`   ${"Google (PageSpeed)".padEnd(20)} ${maskKey(cfg.keys?.google)}`);
+    say(`   ${"Ahrefs".padEnd(20)} ${maskKey(cfg.keys?.ahrefs)}`);
+    say(`\n  ${bold("Preferences")}`);
+    say(`   ${"Brand".padEnd(20)} ${stored.brand || gray("none")}`);
+    say(`   ${"Default market".padEnd(20)} ${stored.market || gray("auto-detect")}`);
+    say(`\n  ${gray("Update anything with: do-audit init")}\n`);
     return;
   }
 
@@ -135,14 +145,53 @@ export async function run(argv) {
     throw new Error(`"${cmd}" is not a command or a valid domain. Try: do-audit example.com  (or --help)`);
   }
   banner(VERSION);
+
+  if (opts.agent) {
+    try {
+      await agentFlow(domain, opts);
+    } catch (e) {
+      process.stdout.write(JSON.stringify({ ok: false, tool: "do-audit", version: VERSION,
+        domain, error: String(e?.message || e) }, null, 2) + "\n");
+      process.exitCode = 1;
+    }
+    closePrompts();
+    return;
+  }
+
   let cfg = loadConfig();
-  if (!configuredProviders(cfg).length) { cfg = await maybeOnboard(cfg); cfg = loadConfig(); }
+  if (!configuredProviders(cfg).length) {
+    // Without a TTY there is nobody to answer the onboarding questions.
+    if (!process.stdin.isTTY) throw new Error(MISSING_KEYS);
+    cfg = await maybeOnboard(cfg);
+    cfg = loadConfig();
+  }
   await auditFlow(cfg, domain, opts);
   closePrompts();
 }
 
+const MISSING_KEYS =
+  "No AI provider configured. Run `do-audit init`, or set one of these environment " +
+  "variables: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, PERPLEXITY_API_KEY, " +
+  "OPENROUTER_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, XAI_API_KEY. " +
+  "Optional for full data: DATAFORSEO_KEY (login:password), GOOGLE_API_KEY, AHREFS_API_KEY.";
+
+// Machine mode: one audit, JSON on stdout, nothing interactive. Files are
+// written only when explicitly asked for (--out / --open / --json).
+async function agentFlow(domain, opts) {
+  const cfg = loadConfig();
+  if (!configuredProviders(cfg).length) throw new Error(MISSING_KEYS);
+  const { d, warnings } = await runAudit(cfg, domain, opts);
+  let files = null;
+  if (opts.out || opts.open || opts.json) {
+    files = saveReportFiles(cfg, d, warnings, opts);
+    if (opts.open) openInBrowser(files.outFile);
+  }
+  const payload = buildSummary(d, warnings, { version: VERSION, files, full: opts.full });
+  process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
+}
+
 const promoLine = () =>
-  console.log(`\n  ${gray("Fixing this is a workflow —")} ${bold("Visibility.so")} ${gray("runs SEO with human + AI agent teams:")}
+  say(`\n  ${gray("Fixing this is a workflow —")} ${bold("Visibility.so")} ${gray("runs SEO with human + AI agent teams:")}
   ${cyan("https://visibility.so/?utm_source=do-audit&utm_medium=cli&utm_campaign=oss-cli")}\n`);
 
 // The interactive session: audit → results in the terminal → menu
@@ -154,7 +203,7 @@ async function auditFlow(cfg, domain, opts) {
     let saved = null;
     if (opts.out || opts.open || opts.json || !interactive) {
       saved = saveReportFiles(cfg, d, warnings, opts);
-      console.log(`  ${green("✓")} Report: ${cyan(saved.outFile)}
+      say(`  ${green("✓")} Report: ${cyan(saved.outFile)}
   ${green("✓")} Notes:  ${cyan(saved.notesFile)}${saved.jsonFile ? `\n  ${green("✓")} Data:   ${cyan(saved.jsonFile)}` : ""}`);
       if (opts.open) openInBrowser(saved.outFile);
     }
@@ -165,22 +214,22 @@ async function auditFlow(cfg, domain, opts) {
         ? [{ label: "Open report in browser", hint: gray(path.basename(saved.outFile)) }]
         : [{ label: "Get report as HTML", hint: gray("save the designed report + internal notes") }];
       items.push({ label: "Audit another site" }, { label: "Exit" });
-      console.log();
+      say();
       const pick = await select("What would you like to do next?", items);
       const label = items[pick].label;
       if (label === "Get report as HTML") {
         saved = saveReportFiles(cfg, d, warnings, opts);
-        console.log(`\n  ${green("✓")} Report saved: ${cyan(saved.outFile)}
+        say(`\n  ${green("✓")} Report saved: ${cyan(saved.outFile)}
   ${green("✓")} Internal notes: ${cyan(saved.notesFile)}
   ${gray("Edit it anytime with: do-audit edit " + path.basename(saved.outFile))}`);
       } else if (label === "Open report in browser") {
         openInBrowser(saved.outFile);
-        console.log(gray("\n  Opened in browser."));
+        say(gray("\n  Opened in browser."));
       } else if (label === "Audit another site") {
         const next = cleanDomain(await ask("Domain to audit:"));
-        if (!next || !next.includes(".")) { console.log(yellow("  Not a valid domain.")); continue; }
+        if (!next || !next.includes(".")) { say(yellow("  Not a valid domain.")); continue; }
         domain = next;
-        console.log();
+        say();
         break; // back to the outer loop → run the next audit
       } else {
         promoLine();

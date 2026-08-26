@@ -1,6 +1,6 @@
 // Renders the full audit result in the terminal — the primary output.
 // The HTML report is generated on demand from the interactive menu.
-import { c, bold, dim, green, red, yellow, cyan, gray } from "./ui.js";
+import { c, say, bold, dim, green, red, yellow, cyan, gray } from "./ui.js";
 
 const W = () => Math.max(60, Math.min(process.stdout.columns || 100, 100));
 
@@ -77,41 +77,41 @@ export function printTerminalReport(d, warnings = []) {
   const scoreCol = score < 50 ? red : score < 75 ? yellow : green;
   const platforms = Object.keys(ai.perPlatform || {});
 
-  console.log(head(`SEO Audit — ${d.domain}`));
-  console.log(`    ${bold("Health Score")}  ${scoreCol(bold(score + "/100"))}   ` +
+  say(head(`SEO Audit — ${d.domain}`));
+  say(`    ${bold("Health Score")}  ${scoreCol(bold(score + "/100"))}   ` +
     `${red(counts.critical + " critical")} · ${yellow(counts.high + " high")} · ` +
     `${counts.medium} medium · ${gray(counts.low + " low")}   ` +
     gray(`market ${d.market?.iso || "?"} · ${d.date}`));
 
   if (a.executive_summary) {
-    console.log(head("Executive Summary"));
-    console.log(wrap(a.executive_summary));
+    say(head("Executive Summary"));
+    say(wrap(a.executive_summary));
   }
   if ((a.top_issues || []).length) {
-    console.log("\n    " + bold("Top priority issues"));
-    a.top_issues.forEach((t, i) => console.log(wrap(`${i + 1}. ${t}`, 6)));
+    say("\n    " + bold("Top priority issues"));
+    a.top_issues.forEach((t, i) => say(wrap(`${i + 1}. ${t}`, 6)));
   }
   if ((a.quick_wins || []).length) {
-    console.log("\n    " + bold("Quick wins"));
-    a.quick_wins.forEach((t, i) => console.log(green("      ✓ ") + wrap(t, 8).trimStart()));
+    say("\n    " + bold("Quick wins"));
+    a.quick_wins.forEach((t, i) => say(green("      ✓ ") + wrap(t, 8).trimStart()));
   }
 
-  console.log(head(`Technical Issues (${(a.technical_issues || []).length})`));
-  if (a.technical_summary) console.log(wrap(a.technical_summary) + "\n");
-  (a.technical_issues || []).forEach((x) => console.log(issueBlock(x) + "\n"));
+  say(head(`Technical Issues (${(a.technical_issues || []).length})`));
+  if (a.technical_summary) say(wrap(a.technical_summary) + "\n");
+  (a.technical_issues || []).forEach((x) => say(issueBlock(x) + "\n"));
   if (d.psi && !d.psi.error) {
-    console.log(`    ${bold("Core Web Vitals")} ${gray("(mobile)")}  ` +
+    say(`    ${bold("Core Web Vitals")} ${gray("(mobile)")}  ` +
       `score ${d.psi.score ?? "—"}/100 · LCP ${d.psi.lcp || "—"} · CLS ${d.psi.cls || "—"} · TBT ${d.psi.tbt || "—"}`);
   }
 
-  console.log(head(`On-Page Issues (${(a.onpage_issues || []).length})`));
-  if (a.onpage_summary) console.log(wrap(a.onpage_summary) + "\n");
-  (a.onpage_issues || []).forEach((x) => console.log(issueBlock(x, true) + "\n"));
+  say(head(`On-Page Issues (${(a.onpage_issues || []).length})`));
+  if (a.onpage_summary) say(wrap(a.onpage_summary) + "\n");
+  (a.onpage_issues || []).forEach((x) => say(issueBlock(x, true) + "\n"));
 
   const shortlist = brief.shortlist || [];
   if (shortlist.length) {
-    console.log(head("Keywords & Rankings"));
-    if (a.keyword_summary) console.log(wrap(a.keyword_summary) + "\n");
+    say(head("Keywords & Rankings"));
+    if (a.keyword_summary) say(wrap(a.keyword_summary) + "\n");
     const rankOf = (k) => {
       const r = (d.serpResults || []).find((s) => s.keyword === k.keyword);
       const hit = r?.organic?.find((o) =>
@@ -119,9 +119,9 @@ export function printTerminalReport(d, warnings = []) {
       return hit?.pos ?? k.rank;
     };
     const rankedCount = shortlist.filter((k) => { const r = rankOf(k); return r != null && r !== 0; }).length;
-    console.log(`    ${bold("Ranking for " + rankedCount + " of " + shortlist.length + " main keywords")}` +
+    say(`    ${bold("Ranking for " + rankedCount + " of " + shortlist.length + " main keywords")}` +
       (rankedCount < shortlist.length ? gray(` — ${shortlist.length - rankedCount} still up for grabs`) : "") + "\n");
-    console.log(tbl(["Keyword", "Volume", "KD", "Rank"],
+    say(tbl(["Keyword", "Volume", "KD", "Rank"],
       shortlist.map((k) => {
         const r = rankOf(k);
         return [k.keyword, fmt(k.volume), fmt(k.difficulty),
@@ -131,56 +131,56 @@ export function printTerminalReport(d, warnings = []) {
 
   const comps = brief.competitors || [];
   if (comps.length) {
-    console.log(head("Competitors"));
-    if (a.competitor_summary) console.log(wrap(a.competitor_summary) + "\n");
+    say(head("Competitors"));
+    if (a.competitor_summary) say(wrap(a.competitor_summary) + "\n");
     if ((d.compData || []).length) {
-      console.log(tbl(["Domain", "Backlinks", "Ref. Domains", "Traffic/mo", "DR"], [
+      say(tbl(["Domain", "Backlinks", "Ref. Domains", "Traffic/mo", "DR"], [
         [cyan(d.domain + " (you)"), fmt(d.siteBacklinks?.backlinks), fmt(d.siteBacklinks?.referring_domains),
           fmt(d.siteRank?.est_traffic), fmt(d.dr?.[d.domain])],
         ...d.compData.map((cd) => [cd.domain, fmt(cd.backlinks), fmt(cd.referring_domains),
           fmt(cd.est_traffic), fmt(d.dr?.[cd.domain])]),
       ]));
     } else {
-      console.log(tbl(["Domain", "Keywords Ranked For"],
+      say(tbl(["Domain", "Keywords Ranked For"],
         (d.compCandidates || []).filter((cd) => comps.includes(cd.domain))
           .map((cd) => [cd.domain, fmt(cd.intersections)])));
-      if (d.candidateSource) console.log(gray(`\n    discovered via live web search (${d.candidateSource})`));
+      if (d.candidateSource) say(gray(`\n    discovered via live web search (${d.candidateSource})`));
     }
   }
 
-  console.log(head("AI Visibility"));
-  if (a.ai_summary) console.log(wrap(a.ai_summary) + "\n");
-  console.log(`    ${"AI Visibility".padEnd(16)} ${meter(ai.visibility)}`);
-  console.log(`    ${"Citation Rate".padEnd(16)} ${meter(ai.citationRate)}`);
+  say(head("AI Visibility"));
+  if (a.ai_summary) say(wrap(a.ai_summary) + "\n");
+  say(`    ${"AI Visibility".padEnd(16)} ${meter(ai.visibility)}`);
+  say(`    ${"Citation Rate".padEnd(16)} ${meter(ai.citationRate)}`);
   for (const [p, v] of Object.entries(ai.perPlatform || {})) {
-    console.log(`    ${("· " + p).padEnd(16)} ${meter(v)}`);
+    say(`    ${("· " + p).padEnd(16)} ${meter(v)}`);
   }
   if ((ai.matrix || []).length && platforms.length) {
-    console.log("\n" + tbl(["Prompt", ...platforms],
+    say("\n" + tbl(["Prompt", ...platforms],
       ai.matrix.map((row) => [row.prompt,
         ...platforms.map((p) => (row.results?.[p] ? green("✓") : red("✗")))])));
   }
   const ao = (d.serpResults || []).filter((s) => s.hasAIOverview);
   if (ao.length) {
-    console.log("\n    " + bold("Google AI Overviews") + gray(` — shown on ${ao.length} of ${d.serpResults.length} keywords`));
-    ao.forEach((s) => console.log(`      ${s.aiDomains?.some((x) => x.includes(d.domain)) ? green("✓ cited") : red("✗ not cited")}  ${s.keyword}`));
+    say("\n    " + bold("Google AI Overviews") + gray(` — shown on ${ao.length} of ${d.serpResults.length} keywords`));
+    ao.forEach((s) => say(`      ${s.aiDomains?.some((x) => x.includes(d.domain)) ? green("✓ cited") : red("✗ not cited")}  ${s.keyword}`));
   }
-  if (a.crawler_access) console.log("\n    " + bold("AI crawler access: ") + wrap(a.crawler_access, 6).trimStart());
+  if (a.crawler_access) say("\n    " + bold("AI crawler access: ") + wrap(a.crawler_access, 6).trimStart());
 
   if ((a.recommendations || []).length) {
-    console.log(head("Action Plan"));
+    say(head("Action Plan"));
     a.recommendations.forEach((r) => {
-      console.log(`  ${sevTag(r.priority)} ${bold(r.action || "")}`);
-      if (r.impact) console.log(dim(wrap(r.impact)));
+      say(`  ${sevTag(r.priority)} ${bold(r.action || "")}`);
+      if (r.impact) say(dim(wrap(r.impact)));
     });
   }
 
   if ((a.assumptions || []).length) {
-    console.log("\n    " + gray(`${a.assumptions.length} assumption${a.assumptions.length > 1 ? "s" : ""} to verify — included in the internal notes when you save the HTML report.`));
+    say("\n    " + gray(`${a.assumptions.length} assumption${a.assumptions.length > 1 ? "s" : ""} to verify — included in the internal notes when you save the HTML report.`));
   }
   if (warnings.length) {
-    console.log("\n    " + yellow("Warnings") + gray(" (data that could not be collected)"));
-    for (const w of warnings) console.log(gray("      · " + w));
+    say("\n    " + yellow("Warnings") + gray(" (data that could not be collected)"));
+    for (const w of warnings) say(gray("      · " + w));
   }
-  console.log();
+  say();
 }

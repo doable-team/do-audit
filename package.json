@@ -1,10 +1,14 @@
 {
   "name": "do-audit",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "description": "Open-source SEO audit CLI. Full technical, on-page, keyword, authority and AI-search visibility audits from your terminal — bring your own API keys, everything runs locally.",
   "type": "module",
   "bin": {
     "do-audit": "bin/do-audit.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",

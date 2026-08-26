@@ -15,7 +15,7 @@ import { llmResponsesDirect, serpCandidates, chatJSON, isNoiseDomain, configured
 import { renderReport } from "./report.js";
 import { renderNotes } from "./notes.js";
 import { printTerminalReport } from "./termreport.js";
-import { Spinner, yellow, cyan, gray, bold } from "./ui.js";
+import { Spinner, say, yellow, cyan, gray, bold } from "./ui.js";
 
 const uniqPages = (tech, home, max) => {
   const seen = new Set(["/", ""]);
@@ -68,7 +68,7 @@ export async function runAudit(cfg, domain, opts = {}) {
   const aiIds = configuredProviders(cfg);
   const d = { domain, date: new Date().toISOString().slice(0, 10), hasDataForSEO: hasDFS };
 
-  console.log(`\n  Auditing ${bold(cyan(domain))} ${gray("· AI: " + aiIds.map((i) => PROVIDERS[i].label).join(", "))}\n`);
+  say(`\n  Auditing ${bold(cyan(domain))} ${gray("· AI: " + aiIds.map((i) => PROVIDERS[i].label).join(", "))}\n`);
 
   // 1 — crawl
   sp.start("Crawling site (robots, sitemap, homepage)…");
@@ -113,7 +113,7 @@ export async function runAudit(cfg, domain, opts = {}) {
   } else {
     d.ranked = []; d.compCandidates = [];
     warnings.push("DataForSEO key not set — keyword/SERP/competitor/backlink data skipped (run: do-audit init)");
-    console.log(`  ${yellow("!")} ${gray("No DataForSEO key — skipping keywords, SERPs, competitors, backlinks")}`);
+    say(`  ${yellow("!")} ${gray("No DataForSEO key — skipping keywords, SERPs, competitors, backlinks")}`);
   }
 
   // 5 — strategy: the LLM curates competitors, shortlist and AI test prompts
@@ -310,7 +310,8 @@ export async function runAudit(cfg, domain, opts = {}) {
 
   // 11 — the result renders in the terminal; HTML is generated on demand
   // (interactive menu, or automatically with --out/--open/--json or piped).
-  printTerminalReport(d, warnings);
+  // Agent mode skips it — the caller wants the JSON payload, not a rendering.
+  if (!opts.agent) printTerminalReport(d, warnings);
   return { d, warnings };
 }
 

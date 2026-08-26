@@ -2,6 +2,12 @@
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
+// Where human-readable output goes. Agent mode (`--agent`) redirects it to
+// stderr so stdout carries nothing but the JSON payload.
+let sink = stdout;
+export function setLogSink(stream) { sink = stream; }
+export const say = (line = "") => sink.write(line + "\n");
+
 const TTY = stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== "dumb";
 const code = (n) => (TTY ? `\x1b[${n}m` : "");
 
@@ -19,7 +25,7 @@ export const cyan = (s) => c.cyan + s + c.reset;
 export const gray = (s) => c.gray + s + c.reset;
 
 export function banner(version) {
-  console.log(`
+  say(`
   ${c.cyan}${c.bold}do-audit${c.reset}${version ? gray(" v" + version) : ""}
   ${gray("Open-source SEO audit — technical · on-page · keywords · authority · AI visibility")}
 `);
@@ -31,18 +37,18 @@ export class Spinner {
   constructor() { this.timer = null; this.text = ""; }
   start(text) {
     this.text = text;
-    if (!stdout.isTTY) { console.log("  … " + text); return this; }
+    if (!sink.isTTY) { say("  … " + text); return this; }
     let i = 0;
     this.stop(false);
     this.timer = setInterval(() => {
-      stdout.write(`\r  ${c.cyan}${FRAMES[i = (i + 1) % FRAMES.length]}${c.reset} ${this.text}\x1b[K`);
+      sink.write(`\r  ${c.cyan}${FRAMES[i = (i + 1) % FRAMES.length]}${c.reset} ${this.text}\x1b[K`);
     }, 80);
     return this;
   }
-  update(text) { this.text = text; if (!stdout.isTTY) console.log("  … " + text); }
+  update(text) { this.text = text; if (!sink.isTTY) say("  … " + text); }
   stop(print = false) {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; if (stdout.isTTY) stdout.write("\r\x1b[K"); }
-    if (print) console.log(print);
+    if (this.timer) { clearInterval(this.timer); this.timer = null; if (sink.isTTY) sink.write("\r\x1b[K"); }
+    if (print) say(print);
   }
   ok(text) { this.stop(`  ${green("✓")} ${text}`); }
   warn(text) { this.stop(`  ${yellow("!")} ${text}`); }
