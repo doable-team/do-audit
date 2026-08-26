@@ -1,6 +1,6 @@
 // Self-contained HTML report in the visibility.so design system (ported from
-// the site's design.md + global.css): Inter for UI, Instrument Serif italic
-// for editorial headlines, warm monochrome palette (#F5F4EF surface, #1A1918
+// the site's design.md + global.css): Inter for UI, Instrument Serif (upright,
+// no italics) for editorial headlines, warm monochrome palette (#F5F4EF surface, #1A1918
 // ink, #E2DFD8 borders — no accent colors; amber #F59E0B only as the AI/agent
 // indicator), 2rem card radii, pill nav, paper-grain noise overlay, sonar
 // logo mark, dark grounding footer. Severity colors are functional data
@@ -275,7 +275,7 @@ const CSS = `
 body{font-family:'Inter',system-ui,sans-serif;background:var(--surface);color:var(--body2);font-size:15.5px;line-height:1.7;-webkit-font-smoothing:antialiased}
 a{color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:#C5C2BB;transition:text-decoration-color .2s}
 a:hover{text-decoration-color:var(--ink)}b,strong{color:var(--ink)}
-em{font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:1.06em}
+em{font-family:'Instrument Serif',Georgia,serif;font-style:normal;font-size:1.06em}
 .noise{position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.03;
 background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 @keyframes sonar{0%,100%{opacity:.2}50%{opacity:1}}
@@ -296,7 +296,7 @@ font-size:13px;font-weight:400;padding:10px 16px;text-align:center;text-decorati
 @media(max-width:800px){.brandbar{flex-direction:column;gap:12px}}
 .brand-meta{font-size:12.5px;color:var(--muted)}
 .label{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-bottom:18px}
-h1.site{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-style:italic;font-size:clamp(40px,6vw,66px);line-height:1.02;letter-spacing:-.01em;color:var(--ink);margin-bottom:18px;word-break:break-word}
+h1.site{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:clamp(40px,6vw,66px);line-height:1.02;letter-spacing:-.01em;color:var(--ink);margin-bottom:18px;word-break:break-word}
 .hero-sub{color:var(--body2);max-width:520px;font-size:16.5px}@media(max-width:800px){.hero-sub{margin:0 auto}}
 .hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}@media(max-width:800px){.hero-tags{justify-content:center}}
 .tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--elev);border:1px solid var(--line);border-radius:100px;padding:7px 14px}
