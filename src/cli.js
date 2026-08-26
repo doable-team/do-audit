@@ -14,7 +14,9 @@ const VERSION = JSON.parse(fs.readFileSync(
 const HELP = `
   ${bold("Usage")}
 
-    do-audit <domain>            Run a full SEO audit (writes an HTML report)
+    do-audit <domain>            Run a full SEO audit (report + internal notes)
+    do-audit edit [report.html]  Edit a report in the browser (local server,
+                                 rich text, drag sections, version history)
     do-audit init                Connect / update API keys (interactive)
     do-audit config              Show configuration status
     do-audit config set <k> <v>  Set a config value (e.g. keys.openai sk-…)
@@ -66,6 +68,34 @@ export async function run(argv) {
   if (opts.help || !cmd) { banner(VERSION); console.log(HELP); closePrompts(); return; }
 
   if (cmd === "init") { banner(VERSION); await onboard(); return; }
+
+  if (cmd === "edit") {
+    let file = rest[0];
+    if (!file) {
+      // Default to the newest audit report in the current directory.
+      file = fs.readdirSync(".")
+        .filter((f) => /^audit-.*\.html$/.test(f) && !/-notes\.html$/.test(f))
+        .map((f) => ({ f, t: fs.statSync(f).mtimeMs }))
+        .sort((a, b) => b.t - a.t)[0]?.f;
+      if (!file) throw new Error("No audit-*.html report found here. Usage: do-audit edit <report.html>");
+    }
+    file = path.resolve(file);
+    if (!fs.existsSync(file)) throw new Error(`File not found: ${file}`);
+    const { startEditServer } = await import("./editor.js");
+    const { url } = await startEditServer(file);
+    banner(VERSION);
+    console.log(`  Editing ${cyan(path.basename(file))}
+  ${bold("Editor:")}  ${cyan(url + "/edit")}
+  ${bold("Preview:")} ${cyan(url + "/")}
+  ${gray("Save writes directly to the file; versions are kept in " + path.basename(file) + ".versions/")}
+  ${gray("Local only (127.0.0.1) — press Ctrl+C to stop.")}\n`);
+    const { spawn } = await import("node:child_process");
+    const opener = process.platform === "darwin" ? "open"
+      : process.platform === "win32" ? "start" : "xdg-open";
+    spawn(opener, [url + "/edit"], { detached: true, stdio: "ignore",
+      shell: process.platform === "win32" }).unref();
+    return new Promise(() => {}); // keep the server alive until Ctrl+C
+  }
 
   if (cmd === "config") {
     const sub = rest[0];

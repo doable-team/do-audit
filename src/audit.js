@@ -12,6 +12,7 @@ import { understand, strategy, analyze } from "./analyze.js";
 import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
 import { llmResponsesDirect, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
+import { renderNotes } from "./notes.js";
 import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
 
 const uniqPages = (tech, home, max) => {
@@ -203,6 +204,9 @@ export async function runAudit(cfg, domain, opts = {}) {
   // 11 — report
   const outFile = path.resolve(opts.out || `audit-${domain.replace(/[^a-z0-9.-]/gi, "_")}-${d.date}.html`);
   fs.writeFileSync(outFile, renderReport(cfg, d));
+  d.reportFile = path.basename(outFile);
+  const notesFile = outFile.replace(/\.html$/, "") + "-notes.html";
+  fs.writeFileSync(notesFile, renderNotes(cfg, d, warnings));
   if (opts.json) {
     const jsonFile = outFile.replace(/\.html$/, "") + ".json";
     fs.writeFileSync(jsonFile, JSON.stringify({ ...d, warnings }, null, 2));
@@ -219,7 +223,9 @@ export async function runAudit(cfg, domain, opts = {}) {
   ${bold("Health score:")} ${a.score >= 75 ? green(a.score + "/100") : a.score >= 50 ? yellow(a.score + "/100") : bold(a.score + "/100")}
   ${bold("Issues:")} ${cnt.critical} critical · ${cnt.high} high · ${cnt.medium} medium · ${cnt.low} low
   ${bold("AI visibility:")} ${d.aiMetrics.visibility}% (${platforms.join(", ")})
-  ${bold("Report:")} ${cyan(outFile)}`);
+  ${bold("Report:")} ${cyan(outFile)}
+  ${bold("Notes:")} ${cyan(notesFile)} ${gray("(internal — assumptions to verify)")}
+  ${bold("Edit:")} ${gray("do-audit edit " + path.basename(outFile))}`);
   if (warnings.length) {
     console.log(`\n  ${yellow("Warnings")} ${gray("(data that could not be collected)")}`);
     for (const w of warnings) console.log(gray("  · " + w));

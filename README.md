@@ -73,7 +73,8 @@ Keys are stored locally in `~/.config/do-audit/config.json` (mode `0600`). Envir
 ## Commands
 
 ```bash
-do-audit <domain>              # run a full audit
+do-audit <domain>              # run a full audit (report + internal notes)
+do-audit edit [report.html]    # edit a report visually in your browser
 do-audit init                  # connect / update API keys (interactive)
 do-audit config                # show configuration status (keys are masked)
 do-audit config set <k> <v>    # set a value non-interactively, e.g.:
@@ -100,7 +101,16 @@ do-audit config path           # print the config file location
 4. **SEO data** *(with DataForSEO)* — ranked keywords, live SERP positions for site vs competitors, Google AI Overview presence and citations, backlink and traffic estimates
 5. **AI visibility** — runs 5 buyer-style test prompts on ChatGPT (with web search), Perplexity and Gemini via DataForSEO's AI Optimization API and measures whether the brand is mentioned or cited; without DataForSEO it falls back to asking your own connected AI providers directly
 6. **Analysis** — an AI auditor writes the report: health score, exhaustive technical and on-page issues with evidence and fixes, share-of-voice, and a prioritized action plan
-7. **Report** — a self-contained HTML file you can send to anyone; optionally put your own brand name on it (`do-audit config set brand "My Agency"`)
+7. **Report** — a self-contained HTML file you can send to anyone; optionally put your own brand name on it (`do-audit config set brand "My Agency"`). An internal `…-notes.html` lands next to it with the AI's assumptions to verify, the market reasoning, and any pipeline warnings — check it before sending the report.
+
+## Editing reports
+
+`do-audit edit report.html` (or just `do-audit edit` for the newest report in the folder) opens the report in your browser with a full visual editor — no HTML knowledge needed:
+
+- Click any text to edit in place; rich-text toolbar (bold/italic/size/color, headings, lists, alignment, links)
+- Add, drag-to-reorder, or delete whole sections; insert tables and images (uploads are compressed and embedded)
+- **Version history**: every save snapshots the previous version — preview and restore any of the last 20, or reset to the original AI-generated report
+- Runs on a localhost-only server (127.0.0.1); Save writes directly back to the file, versions live in `report.html.versions/`
 
 ## Privacy
 
