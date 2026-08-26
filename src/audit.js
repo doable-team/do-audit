@@ -94,7 +94,7 @@ export async function runAudit(cfg, domain, opts = {}) {
 
   // 5 — strategy: the LLM curates competitors, shortlist and AI test prompts
   //     from the real data (true competitors only, mid/long-tail keywords).
-  sp.start("SEO strategy: competitors, keyword shortlist, test prompts (AI)…");
+  sp.start("SEO strategy: main keywords, competitors, test prompts (AI)…");
   const stratArgs = {
     business: d.brief.business_summary, brand: d.brief.brand_name,
     market: d.market, ranked: d.ranked, candidates: d.compCandidates,
@@ -113,7 +113,7 @@ export async function runAudit(cfg, domain, opts = {}) {
     } catch (e) { skip("strategy retry", e); }
   }
   d.brief = merged;
-  sp.ok(`${(d.brief.shortlist || []).length} shortlist keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
+  sp.ok(`${(d.brief.shortlist || []).length} main keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
 
   // Shared: the LLM picks up to 3 TRUE competitors from ranking candidates.
   const pickCompetitors = async (sourceLabel) => {

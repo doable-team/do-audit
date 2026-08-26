@@ -97,8 +97,8 @@ do-audit config path           # print the config file location
 
 1. **Crawl** — robots.txt, sitemap, redirects, security headers, soft-404s, llms.txt, homepage + internal pages (titles, metas, canonicals, headings, schema, images, word counts)
 2. **Performance** — Lighthouse mobile score and Core Web Vitals via PageSpeed Insights
-3. **Research brief** — AI determines the business, brand, target market, competitors, keyword shortlist and visibility test prompts
-4. **SEO data** *(with DataForSEO)* — ranked keywords, live SERP positions for site vs competitors, Google AI Overview presence and citations, backlink and traffic estimates
+3. **Research brief** — AI determines the business, brand, target market, competitors and visibility test prompts
+4. **Keyword research** — the business's **main keywords** (derived from its services, products and market — the terms customers actually search), then checks which of them the site ranks for via live SERPs; volume/difficulty shown where ranking data exists *(with DataForSEO — plus AI Overview presence/citations, backlink and traffic estimates)*
 5. **AI visibility** — runs 5 buyer-style test prompts on ChatGPT (with web search), Perplexity and Gemini via DataForSEO's AI Optimization API and measures whether the brand is mentioned or cited; without DataForSEO it falls back to asking your own connected AI providers directly
 6. **Analysis** — an AI auditor writes the report: health score, exhaustive technical and on-page issues with evidence and fixes, share-of-voice, and a prioritized action plan
 7. **Report** — a self-contained HTML file you can send to anyone; optionally put your own brand name on it (`do-audit config set brand "My Agency"`). An internal `…-notes.html` lands next to it with the AI's assumptions to verify, the market reasoning, and any pipeline warnings — check it before sending the report.

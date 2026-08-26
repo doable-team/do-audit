@@ -34,8 +34,9 @@ All numbers come from the live crawl${d.hasDataForSEO ? " + DataForSEO" : ""}${d
 ${errs ? `<h2>Pipeline warnings (data that could not be collected)</h2><ul>${errs}</ul>` : ""}
 <h2>Methodology reminders (shown in the report)</h2>
 <ul><li>AI visibility scores are based on ${(d.brief?.prompts || []).length || 5} query fan-out prompts, single run per platform (${esc(platforms.join(", "))}).</li>
-${d.hasDataForSEO ? "<li>Keyword/backlink/traffic data: DataForSEO · CWV: PageSpeed Insights" + (d.dr ? " · DR: Ahrefs APIv3" : "") + ".</li>"
-  : "<li>No DataForSEO key was configured — keywords are AI-suggested and carry no volume/rank data.</li>"}
+<li>Keywords are the business's MAIN keywords (AI-derived from services/offerings/market), rank-checked ${d.hasDataForSEO ? "against live Google SERPs" : "— no live SERP source configured"}; volume/KD only where ranking data exists.</li>
+${d.hasDataForSEO ? "<li>SERP/backlink/traffic data: DataForSEO · CWV: PageSpeed Insights" + (d.dr ? " · DR: Ahrefs APIv3" : "") + ".</li>"
+  : "<li>No DataForSEO key was configured — no SERP/backlink/traffic data.</li>"}
 <li>Screenshots are not captured — verify visual claims manually if needed.</li>
 <li>Edit the report in place with: <b>do-audit edit ${esc(d.reportFile || "&lt;report&gt;.html")}</b></li></ul>
 </body></html>`;

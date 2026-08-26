@@ -41,18 +41,22 @@ export async function strategy(cfg, { business, brand, market, ranked, candidate
           ? "from candidates (exclude marketplaces/media/giants)"
           : "from your knowledge of this business's space (real companies competing for the same customers; " +
             "exclude marketplaces/media/giants)") + "; " +
-        "(2) build a shortlist of EXACTLY 10 MID-TAIL or LONG-TAIL keywords (2+ words, clear intent, no broad " +
-        "head terms) " +
+        "(2) build a shortlist of EXACTLY 10 MAIN KEYWORDS for this business — the terms a potential customer " +
+        "would actually search to find its services/products, derived from the business summary, offerings, " +
+        "audience and target market/location (MID-TAIL or LONG-TAIL, 2+ words, clear buyer intent, no broad " +
+        "head terms). Choose them for the BUSINESS, independent of whether the site currently ranks — the whole " +
+        "point is to see which main keywords it ranks for and which it is missing" +
         (hasKw
-          ? "mixing currently-ranking, striking-distance (rank 4-30) and opportunity terms relevant to the " +
-            "target market — carry over each keyword's volume/difficulty/rank from ranked_keywords when present"
-          : "this business should target in its market (no keyword metrics available — set volume, difficulty " +
-            "and rank to null, but the 10 keywords themselves are REQUIRED)") + "; " +
+          ? ". Use ranked_keywords only as context: adopt the site's actual terminology where sensible, and " +
+            "carry over volume/difficulty/rank ONLY for main keywords that also appear there; set metrics to " +
+            "null for the rest — do NOT limit the list to ranked keywords"
+          : ". No keyword metrics are available — set volume, difficulty and rank to null; the 10 main " +
+            "keywords themselves are REQUIRED") + "; " +
         "(3) write 5 AI-visibility test prompts via query fan-out, one each: recommendation, comparison, " +
         "informational, local-or-audience, transactional — phrased as a real user would ask an AI assistant, " +
         "NEVER naming the brand itself; (4) list any assumptions, each as a quoted sentence. " +
         (force ? "IMPORTANT: a previous attempt returned an empty shortlist/prompts — that is invalid. " +
-          "You MUST return exactly 10 keywords and 5 prompts derived from the business description. " : "") +
+          "You MUST return exactly 10 main keywords and 5 prompts derived from the business description. " : "") +
         "Return {competitors:[domains], shortlist:[{keyword,volume,difficulty,rank}], prompts:[{prompt,category}], assumptions:[]}",
       business, brand,
       target_market: market,

@@ -138,16 +138,21 @@ export function renderReport(cfg, d) {
     ${(a.onpage_issues || []).map((x) => issueCard(x, true)).join("")}`));
 
   if (hasKwData) {
+    const rankedCount = shortlist.filter((k) => {
+      const r = serpRank(k.keyword, site) ?? k.rank;
+      return r != null && r !== 0;
+    }).length;
     sections.push(sec("keywords", "Keyword Intelligence",
       `<h2>Keyword Research &amp; Rankings</h2><p class="lead">${esc(a.keyword_summary || "")}</p>
+      <p class="kw-coverage">Ranking for <b>${rankedCount} of ${shortlist.length}</b> main keywords${rankedCount < shortlist.length ? ` — <b>${shortlist.length - rankedCount}</b> still up for grabs` : ""}</p>
       ${table(["Keyword", "Volume", "KD", site, ...compDomains],
         shortlist.map((k) => `<tr><td><b>${esc(k.keyword)}</b></td>
           <td class="num">${fmt(k.volume)}</td><td class="num">${fmt(k.difficulty)}</td>
           ${rankCell(serpRank(k.keyword, site) ?? k.rank, true)}
           ${compDomains.map((c) => rankCell(serpRank(k.keyword, c))).join("")}</tr>`).join(""), [1, 2])}
-      <p class="muted small">Volume = monthly Google searches · KD = difficulty (0–100)${
-        shortlist.some((k) => k.volume != null) ? "" : " · keyword ideas are AI-suggested (no ranked-keyword data for this site)"}${
-        (d.serpResults || []).length ? ` · Rank data: DataForSEO (live, ${today}, market: ${esc(d.market?.iso || "US")})` : " · no live rank data source configured"}</p>`));
+      <p class="muted small">Main keywords this business should own, derived from its services, offerings and market
+      · Volume = monthly Google searches, KD = difficulty (0–100), shown where ranking data exists${
+        (d.serpResults || []).length ? ` · Rank = live Google position (DataForSEO, ${today}, market: ${esc(d.market?.iso || "US")})` : " · no live rank data source configured"}</p>`));
   }
 
   if (hasCandidates) {
@@ -347,6 +352,8 @@ html.js .reveal.in{opacity:1;transform:none}
 h2{font-family:'Instrument Serif',Georgia,serif;font-weight:500;color:var(--ink);font-size:clamp(26px,3.4vw,34px);letter-spacing:-.01em;margin-bottom:16px}
 h3{color:var(--ink);font-size:16px;font-weight:600;margin:32px 0 12px}
 .lead{font-size:16px;margin-bottom:16px;max-width:70ch}.small{font-size:12.5px}.muted{color:var(--muted)}
+.kw-coverage{display:inline-block;background:var(--white);border:1px solid var(--line);border-radius:100px;padding:7px 16px;font-size:13px;color:var(--body2);margin-bottom:6px}
+.kw-coverage b{color:var(--ink)}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px}@media(max-width:640px){.two-col{grid-template-columns:1fr}}
 .panel{background:var(--white);border:1px solid var(--line);border-radius:1rem;padding:22px 24px}
 .panel h3{margin:0 0 12px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}

@@ -118,6 +118,9 @@ export function printTerminalReport(d, warnings = []) {
         (o.domain || "").replace(/^www\./, "") === d.domain.replace(/^www\./, ""));
       return hit?.pos ?? k.rank;
     };
+    const rankedCount = shortlist.filter((k) => { const r = rankOf(k); return r != null && r !== 0; }).length;
+    console.log(`    ${bold("Ranking for " + rankedCount + " of " + shortlist.length + " main keywords")}` +
+      (rankedCount < shortlist.length ? gray(` — ${shortlist.length - rankedCount} still up for grabs`) : "") + "\n");
     console.log(tbl(["Keyword", "Volume", "KD", "Rank"],
       shortlist.map((k) => {
         const r = rankOf(k);
