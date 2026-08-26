@@ -117,6 +117,31 @@ export async function rankOverview(cfg, domain, loc, lang) {
            est_traffic: Math.round(m.organic?.etv || 0) };
 }
 
+// AI-visibility testing via DataForSEO's AI Optimization API — the same
+// engine the original audit agent uses. DataForSEO runs the prompt on the
+// real LLM platform and returns the answer text plus cited URLs.
+export const AI_PROVIDERS = [
+  { provider: "chat_gpt", model: "gpt-4o-mini", web: true, label: "ChatGPT" },
+  { provider: "perplexity", model: "sonar", web: false, label: "Perplexity" },
+  { provider: "gemini", model: "gemini-2.5-flash", web: false, label: "Gemini" },
+];
+
+export async function llmResponse(cfg, prompt, provider, model, webSearch) {
+  const task = { user_prompt: prompt, model_name: model, max_output_tokens: 700 };
+  if (webSearch) task.web_search = true;
+  const r = await call(cfg, `/v3/ai_optimization/${provider}/llm_responses/live`, [task]);
+  const d = r[0] || {};
+  const parts = [];
+  const urls = [];
+  for (const it of d.items || []) {
+    for (const sec of it.sections || []) {
+      if (sec.text) parts.push(sec.text);
+      for (const ann of sec.annotations || []) if (ann.url) urls.push(ann.url);
+    }
+  }
+  return { provider, response: parts.join("\n").slice(0, 4000), cited: urls.slice(0, 20) };
+}
+
 // Common markets → DataForSEO location codes (fallback when the LLM can't
 // infer one, or the user passes --market).
 export const MARKETS = {

@@ -10,7 +10,7 @@ import { fetchPage, techCheck, psi, ahrefsDR } from "./crawl.js";
 import * as dfs from "./dataforseo.js";
 import { understand, strategy, analyze } from "./analyze.js";
 import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
-import { visibilityTests, configuredProviders, PROVIDERS, pool } from "./ai.js";
+import { llmResponsesDirect, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
 import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
 
@@ -129,18 +129,46 @@ export async function runAudit(cfg, domain, opts = {}) {
     sp.ok("Domain ratings collected");
   }
 
-  // 9 — AI visibility across every configured provider, with live web search
+  // 9 — AI visibility. Primary path (same as the original agent): DataForSEO's
+  // AI Optimization API runs each prompt on ChatGPT (web search), Perplexity
+  // and Gemini and returns answer text + cited URLs. Fallback when DataForSEO
+  // is not connected: the user's own AI providers, called directly.
   const prompts = (d.brief.prompts || []).slice(0, 5);
-  sp.start(`AI visibility: ${prompts.length} prompts × ${aiIds.length} platforms (web search on)…`);
-  d.aiResults = await visibilityTests(cfg, prompts, d.brief.brand_name || domain, domain,
-    (done, total) => sp.update(`AI visibility: ${done}/${total} responses…`));
+  d.aiResults = [];
+  if (hasDFS) {
+    const combos = [];
+    for (const p of prompts) for (const pr of dfs.AI_PROVIDERS) combos.push({ p, pr });
+    sp.start(`AI visibility via DataForSEO: ${prompts.length} prompts × ${dfs.AI_PROVIDERS.length} platforms…`);
+    let done = 0;
+    const rs = await pool(combos, 3, async ({ p, pr }) => {
+      const r = await dfs.llmResponse(cfg, p.prompt, pr.provider, pr.model, pr.web);
+      sp.update(`AI visibility: ${++done}/${combos.length} responses…`);
+      return { prompt: p.prompt, category: p.category, platform: pr.label,
+        response: r.response, cited: r.cited };
+    });
+    for (const r of rs) if (r?.error) skip("ai_visibility", r.error);
+    d.aiResults = rs.filter((r) => r && !r.error);
+  }
+  if (!d.aiResults.length) {
+    // No DataForSEO (or its AI Optimization API unavailable) — direct fallback.
+    sp.start(`AI visibility (direct): ${prompts.length} prompts × ${aiIds.length} providers…`);
+    d.aiResults = await llmResponsesDirect(cfg, prompts,
+      (done, total) => sp.update(`AI visibility: ${done}/${total} responses…`));
+  }
+  // Scoring — identical to the agent: a hit is the brand name OR the domain in
+  // the answer text, or a cited URL on the domain.
+  const brand = String(d.brief.brand_name || domain.split(".")[0]);
+  const mention = (t) => t && (t.toLowerCase().includes(brand.toLowerCase()) ||
+    t.toLowerCase().includes(domain));
   const matrixMap = {};
   let mentions = 0, citations = 0;
   for (const r of d.aiResults) {
     matrixMap[r.prompt] = matrixMap[r.prompt] || {};
-    matrixMap[r.prompt][r.platform] = r.mentioned;
-    if (r.mentioned) mentions++;
-    if (r.cited) citations++;
+    const hit = mention(r.response);
+    const cited = (r.cited || []).some((u) => u.includes(domain));
+    matrixMap[r.prompt][r.platform] = hit || cited;
+    if (hit || cited) mentions++;
+    if (cited) citations++;
   }
   const total = d.aiResults.length || 1;
   const platforms = [...new Set(d.aiResults.map((r) => r.platform))];
@@ -151,7 +179,8 @@ export async function runAudit(cfg, domain, opts = {}) {
     matrix: Object.entries(matrixMap).map(([prompt, results]) => ({ prompt, results })),
     perPlatform: Object.fromEntries(platforms.map((p) => {
       const rs = d.aiResults.filter((r) => r.platform === p);
-      return [p, rs.length ? Math.round((rs.filter((r) => r.mentioned).length / rs.length) * 100) : 0];
+      const hits = rs.filter((r) => matrixMap[r.prompt]?.[p]).length;
+      return [p, rs.length ? Math.round((hits / rs.length) * 100) : 0];
     })),
   };
   sp.ok(`AI visibility ${d.aiMetrics.visibility}% across ${platforms.length} platforms`);
@@ -166,7 +195,7 @@ export async function runAudit(cfg, domain, opts = {}) {
     competitors: (d.compData || []).map((c) => ({ ...c, dr: d.dr?.[c.domain] })),
     ai_metrics: d.aiMetrics,
     ai_responses: d.aiResults.map((r) => ({ platform: r.platform, prompt: r.prompt,
-      excerpt: r.excerpt })),
+      excerpt: (r.response || "").slice(0, 500) })),
     prior_assumptions: d.brief.assumptions || [],
   }));
   sp.ok(`Analysis complete — health score ${d.analysis.score ?? "?"}/100`);

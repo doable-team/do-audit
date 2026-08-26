@@ -194,9 +194,12 @@ export async function pool(items, limit, fn) {
   return results;
 }
 
-// AI-visibility testing: ask every configured provider each prompt, then check
-// whether the brand/domain is mentioned or cited in the answer.
-export async function visibilityTests(cfg, prompts, brand, domain, onProgress) {
+// Fallback AI-visibility path when no DataForSEO key is configured: ask the
+// user's own connected providers directly (with live web search) and return
+// raw responses in the same shape the DataForSEO path produces —
+// {prompt, category, platform, response, cited:[urls]}. Scoring happens in
+// the pipeline, identically for both paths.
+export async function llmResponsesDirect(cfg, prompts, onProgress) {
   const ids = configuredProviders(cfg);
   const combos = [];
   for (const prompt of prompts) for (const id of ids) combos.push({ prompt, id });
@@ -207,13 +210,9 @@ export async function visibilityTests(cfg, prompts, brand, domain, onProgress) {
       "Name specific companies, products or websites where relevant.",
       prompt.prompt || prompt, { maxTokens: 700, web: true });
     onProgress?.(++done, combos.length);
-    const hay = (text || "").toLowerCase();
-    const mentioned = hay.includes(String(brand).toLowerCase()) || hay.includes(domain.toLowerCase());
-    const citedSite = (cited || []).some((u) => u.includes(domain));
-    return { platform: PROVIDERS[id].label, provider: id,
-      prompt: prompt.prompt || prompt, category: prompt.category || "",
-      mentioned: mentioned || citedSite, cited: citedSite,
-      excerpt: (text || "").slice(0, 500) };
+    return { prompt: prompt.prompt || prompt, category: prompt.category || "",
+      platform: PROVIDERS[id].label,
+      response: (text || "").slice(0, 4000), cited: (cited || []).slice(0, 20) };
   });
   return results.filter((r) => r && !r.error);
 }
