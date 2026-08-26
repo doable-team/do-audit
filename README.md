@@ -2,6 +2,8 @@
 
 **Open-source SEO audit CLI.** Full technical, on-page, keyword, authority and AI-search-visibility audits — straight from your terminal, producing a beautiful client-ready HTML report.
 
+> Built by the team behind **[Visibility.so](https://visibility.so/?utm_source=do-audit&utm_medium=readme&utm_campaign=oss-cli)** — the SEO workspace where human strategists and AI agents run audits, content, links and rank tracking together. [Get started for free →](https://app.visibility.so/register?utm_source=do-audit&utm_medium=readme&utm_campaign=oss-cli)
+
 - 🔑 **Bring your own keys** — you connect your own API keys during onboarding; nothing is proxied
 - 💻 **100% local** — no backend, no accounts, no telemetry; your data never leaves your machine
 - 🤖 **AI-visibility testing across 8 platforms** — ChatGPT, Claude, Gemini, Perplexity, DeepSeek, Groq, Grok, OpenRouter

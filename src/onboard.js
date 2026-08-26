@@ -68,34 +68,42 @@ export async function onboard() {
   console.log(green(`\n  ✓ Analysis provider: ${PROVIDERS[cfg.analysisProvider].label}\n`));
   hr();
 
-  // --- 2. SEO data sources (all optional, skippable in one go) ---
-  console.log(`\n  ${bold("2. SEO data sources")} ${gray("— optional. They unlock real ranking data;")}
-  ${gray("without them you still get crawl, performance, AI visibility and the full report.")}\n`);
-  const dataChoice = await select("Connect optional data sources?", [
-    { label: "Yes — connect DataForSEO / Google / Ahrefs",
-      hint: gray("keywords, live SERPs, competitors, backlinks, DR") },
-    { label: "Skip all — AI-only audit",
-      hint: gray("add them anytime later with: do-audit init") },
-  ], { initial: cfg.keys.dataforseo || cfg.keys.google || cfg.keys.ahrefs ? 0 : 1 });
+  // --- 2. SEO data sources (each optional, each individually skippable) ---
+  console.log(`\n  ${bold("2. SEO data sources")} ${gray("— optional. Connect or skip each one;")}
+  ${gray("without them you still get crawl, performance, AI visibility and the full report.")}`);
 
-  if (dataChoice === 0) {
-    console.log(`\n  ${bold("DataForSEO")} ${gray("— keywords, live SERPs, competitors, backlinks.")}
-  ${gray("Sign up: https://dataforseo.com — key format is login:password. Enter to skip.")}`);
-    const dfsKey = await ask("DataForSEO key (login:password):",
-      { secret: true, def: cfg.keys.dataforseo ? "keep current" : "" });
-    if (dfsKey && dfsKey !== "keep current") cfg.keys.dataforseo = dfsKey;
-
-    console.log(`\n  ${bold("Google API key")} ${gray("— lifts PageSpeed Insights rate limits (PSI works without it).")}
-  ${gray("Get one: https://developers.google.com/speed/docs/insights/v5/get-started. Enter to skip.")}`);
-    const gKey = await ask("Google API key:", { secret: true, def: cfg.keys.google ? "keep current" : "" });
-    if (gKey && gKey !== "keep current") cfg.keys.google = gKey;
-
-    console.log(`\n  ${bold("Ahrefs API key")} ${gray("— free domain-rating endpoint.")}
-  ${gray("Get one: https://ahrefs.com/api. Enter to skip.")}`);
-    const aKey = await ask("Ahrefs API key:", { secret: true, def: cfg.keys.ahrefs ? "keep current" : "" });
-    if (aKey && aKey !== "keep current") cfg.keys.ahrefs = aKey;
-  } else {
-    console.log(gray("\n  Skipped — running AI-only audits. Add data sources later with: do-audit init"));
+  const SOURCES = [
+    { key: "dataforseo", name: "DataForSEO",
+      hint: "keywords, live SERPs, competitors, backlinks",
+      url: "https://dataforseo.com", prompt: "DataForSEO key (login:password):" },
+    { key: "google", name: "Google PageSpeed",
+      hint: "lifts PageSpeed Insights rate limits (PSI works without a key)",
+      url: "https://developers.google.com/speed/docs/insights/v5/get-started",
+      prompt: "Google API key:" },
+    { key: "ahrefs", name: "Ahrefs",
+      hint: "free domain-rating endpoint",
+      url: "https://ahrefs.com/api", prompt: "Ahrefs API key:" },
+  ];
+  for (const s of SOURCES) {
+    console.log();
+    const has = !!cfg.keys[s.key];
+    const choice = has
+      ? await select(`${s.name} ${gray("— " + s.hint)}`, [
+          { label: "Keep connected", hint: gray(maskKey(cfg.keys[s.key])) },
+          { label: "Replace key" },
+          { label: "Disconnect", hint: gray("remove the stored key") },
+        ])
+      : await select(`${s.name} ${gray("— " + s.hint)}`, [
+          { label: "Skip for now", hint: gray("add later with: do-audit init") },
+          { label: `Connect ${s.name}`, hint: gray("get a key: " + s.url) },
+        ]);
+    if (has && choice === 2) { delete cfg.keys[s.key]; console.log(gray(`  ${s.name} disconnected`)); continue; }
+    if ((has && choice === 1) || (!has && choice === 1)) {
+      console.log(gray(`  Get a key: ${s.url}`));
+      const key = await ask(s.prompt, { secret: true });
+      if (key) { cfg.keys[s.key] = key; console.log(green(`  ✓ ${s.name} connected`)); }
+      else console.log(gray(`  ${s.name} skipped`));
+    }
   }
   hr();
 

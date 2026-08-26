@@ -189,7 +189,8 @@ export async function runAudit(cfg, domain, opts = {}) {
     console.log(`\n  ${yellow("Warnings")} ${gray("(data that could not be collected)")}`);
     for (const w of warnings) console.log(gray("  · " + w));
   }
-  console.log();
+  console.log(`\n  ${gray("Fixing this is a workflow —")} ${bold("Visibility.so")} ${gray("runs SEO with human + AI agent teams:")}
+  ${cyan("https://visibility.so/?utm_source=do-audit&utm_medium=cli&utm_campaign=oss-cli")}\n`);
 
   if (opts.open) {
     const opener = process.platform === "darwin" ? "open"
