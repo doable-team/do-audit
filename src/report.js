@@ -205,16 +205,22 @@ export function renderReport(cfg, d) {
       `<tr><td><span class="pill ${sevClass(r.priority)}">${esc(sevWord(r.priority).toUpperCase())}</span></td>
       <td><b>${esc(r.action)}</b></td><td>${esc(r.impact)}</td></tr>`).join(""))}`));
 
-  // Visibility.so CTA — dark grounding card, per the design system
+  // Visibility.so CTA — mirrors the homepage hero: serif medium title with
+  // inline Brain/Human and Bot/Agentic icons (Lucide, stroke 1.5, floating),
+  // frosted tag pill, rounded-lg white/80 primary + glass secondary buttons.
+  const iBrain = `<svg class="hi hi-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>`;
+  const iBot = `<svg class="hi hi-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>`;
+  const iArrow = `<svg class="hi hi-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
   sections.push(`<section id="next" class="reveal cta">
-    <span class="cta-label"><span class="agent-dot"></span>Next Steps</span>
-    <h2 class="cta-head">The future of SEO is <em>human&nbsp;+&nbsp;agentic</em></h2>
+    <span class="cta-tag"><span class="cta-new">New</span>Visibility.so V2 is now live!</span>
+    <h2 class="cta-head">The Future of SEO is<br>
+    <span class="cta-word">${iBrain}Human</span> + <span class="cta-word">${iBot}Agentic.</span></h2>
     <p class="cta-pitch">This audit is a snapshot — fixing it is a workflow. <b>Visibility.so</b> gives your team an SEO
     workspace where human strategists and AI agents work side by side: technical audits, content creation, link
     building and rank tracking, orchestrated in one place.</p>
     <div class="cta-actions">
-      <a class="btn-light" href="${V_REG}&utm_content=cta" target="_blank" rel="noopener">Get started for free</a>
-      <a class="btn-ghost" href="${V_HOME}&utm_content=cta-learn" target="_blank" rel="noopener">Learn more →</a>
+      <a class="btn-hero" href="${V_REG}&utm_content=cta" target="_blank" rel="noopener">Get started ${iArrow}</a>
+      <a class="btn-glass" href="${V_HOME}&utm_content=cta-learn" target="_blank" rel="noopener">Learn more</a>
     </div>
   </section>`);
 
@@ -378,18 +384,29 @@ td.no{color:var(--warn);background:var(--warnbg);font-weight:700;text-align:cent
 .bar-fill.crit{background:var(--crit)}.bar-fill.warn{background:var(--amber)}
 .bar-fill.good{background:var(--good)}.bar-fill.neutral{background:var(--ink)}
 .crit-t{color:var(--crit)}.warn-t{color:var(--warn)}.good-t{color:var(--good)}.neutral-t{color:var(--ink)}
-section.cta{position:relative;background:var(--dark);border-color:var(--dark);color:var(--ondark);text-align:center;padding:64px 48px}
-.cta-label{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--ondark);margin-bottom:18px}
-.agent-dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:sonar 3s infinite}
-.cta-head{font-family:'Instrument Serif',Georgia,serif;font-weight:500;color:#fff;font-size:clamp(30px,4.4vw,46px);margin-bottom:16px}
-.cta-head em{color:var(--ondark2)}
-.cta-pitch{max-width:620px;margin:0 auto 32px;font-size:15px;color:var(--ondark)}.cta-pitch b{color:#fff}
-.cta-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn-light{background:var(--surface);color:var(--ink);font-weight:500;font-size:14px;border-radius:100px;padding:13px 28px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:.15s}
-.btn-light:hover{background:var(--ondark2);text-decoration:none;transform:translateY(-1px)}
-.btn-ghost{color:var(--ondark2);font-weight:500;font-size:14px;border:1px solid var(--darkline);border-radius:100px;padding:13px 28px;text-decoration:none;transition:.15s}
-.btn-ghost:hover{border-color:#4A4744;color:#fff;text-decoration:none}
-@media(max-width:640px){section.cta{padding:48px 24px}}
+section.cta{position:relative;background:#000;border-color:#000;color:#fff;text-align:center;padding:72px 48px}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.cta-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);
+-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+border-radius:.5rem;padding:6px 10px;margin-bottom:24px;font-size:12px;font-weight:500;color:#8E8B82}
+.cta-new{background:#F97316;color:#fff;border-radius:.375rem;font-size:12px;font-weight:500;padding:2px 6px}
+.cta-head{font-family:'Instrument Serif',Georgia,serif;font-weight:500;color:#fff;font-size:clamp(38px,6vw,64px);letter-spacing:-2px;line-height:1.15;margin-bottom:14px}
+.cta-word{display:inline-flex;align-items:center}
+.hi{flex:none}
+.hi-brain{width:.75em;height:.75em;margin-right:.18em;animation:float 4s ease-in-out infinite}
+.hi-bot{width:.95em;height:.95em;margin-right:.18em;animation:float 4s ease-in-out infinite;animation-delay:2s}
+.cta-pitch{max-width:640px;margin:0 auto 32px;font-size:16px;line-height:1.55;color:#EFF2F5;opacity:.9}.cta-pitch b{color:#fff}
+.cta-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn-hero{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 36px;border-radius:.5rem;
+background:rgba(255,255,255,.8);color:#000;font-size:14px;font-weight:500;text-decoration:none;transition:background .2s}
+.btn-hero:hover{background:#fff;text-decoration:none}
+.btn-hero .hi-arrow{width:16px;height:16px}
+.btn-glass{display:inline-flex;align-items:center;height:48px;padding:0 36px;border-radius:.5rem;color:#fff;
+font-size:14px;font-weight:500;text-decoration:none;background:linear-gradient(rgba(255,255,255,.06),rgba(255,255,255,.06)),linear-gradient(rgba(10,10,12,.38),rgba(10,10,12,.38));
+border:1px solid rgba(255,255,255,.10);-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.08);transition:border-color .2s}
+.btn-glass:hover{border-color:rgba(255,255,255,.25);text-decoration:none}
+@media(max-width:640px){section.cta{padding:52px 24px}.cta-head{letter-spacing:-1px}}
 footer{background:var(--dark);margin-top:48px}
 .foot-in{max-width:1152px;margin:0 auto;padding:36px 24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--ondark)}
 .foot-in a{color:var(--ondark2);text-decoration-color:#4A4744}.foot-in a:hover{color:#fff}
