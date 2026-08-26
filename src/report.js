@@ -164,9 +164,9 @@ export function renderReport(cfg, d) {
         ? table(["Competitor", "Shared KW", "Organic KW", "Est. Traffic/mo"],
             rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td>
             <td class="num">${fmt(c.organic_keywords)}</td><td class="num">${fmt(c.est_traffic)}</td></tr>`).join(""), [1, 2, 3])
-        : table(["Competitor", "Keywords Ranked For"],
-            rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td></tr>`).join(""), [1])
-          + `<p class="muted small">Discovered via live web search${d.candidateSource ? ` (${esc(d.candidateSource)})` : ""}: domains appearing in top results across the keyword shortlist.</p>`}`));
+        : table(["Competitor", `Main Keywords Ranked For (of ${shortlist.length || 10})`, "Avg. Position"],
+            rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td><td class="num">${c.avg_position != null ? "#" + fmt(c.avg_position) : "—"}</td></tr>`).join(""), [1, 2])
+          + `<p class="muted small">Discovered from the main keywords${d.candidateSource ? ` via ${esc(d.candidateSource)}` : ""}: domains actually ranking across the keyword shortlist, ranked by coverage and position.</p>`}`));
   }
 
   if (hasAuthority) {

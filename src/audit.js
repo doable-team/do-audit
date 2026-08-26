@@ -1,6 +1,7 @@
 // The audit pipeline, mirroring the proven step order of the original agent:
-// crawl → performance → understand (LLM) → SEO data → strategy (LLM curates
-// competitors/keywords/prompts from the real data) → SERP checks → authority →
+// crawl → performance → understand (LLM) → SEO data → strategy (main
+// keywords + prompts) → SERP checks → competitor discovery FROM the main
+// keywords' SERPs → authority →
 // AI visibility (web-search enabled) → analysis → HTML report.
 // Every data source degrades gracefully when its key is missing.
 import fs from "node:fs";
@@ -34,6 +35,30 @@ const uniqPages = (tech, home, max) => {
   }
   return out;
 };
+
+
+// Aggregate competitor candidates from live SERPs: which domains rank across
+// the main keywords, how many keywords each covers, and at what positions.
+export function serpCompetitorCandidates(serpResults, domain, limit = 8) {
+  const stats = new Map();
+  for (const r of serpResults || []) {
+    const seen = new Set();
+    for (const o of r.organic || []) {
+      const h = String(o.domain || "").replace(/^www\./, "").toLowerCase();
+      if (!h || h === domain || seen.has(h) || isNoiseDomain(h)) continue;
+      seen.add(h);
+      const st = stats.get(h) || { hits: 0, posSum: 0 };
+      st.hits += 1;
+      st.posSum += Number(o.pos) || 20;
+      stats.set(h, st);
+    }
+  }
+  return [...stats.entries()]
+    .sort((a, b) => b[1].hits - a[1].hits || (a[1].posSum / a[1].hits) - (b[1].posSum / b[1].hits))
+    .slice(0, limit)
+    .map(([dom, st]) => ({ domain: dom, intersections: st.hits,
+      avg_position: Math.round(st.posSum / st.hits) }));
+}
 
 export async function runAudit(cfg, domain, opts = {}) {
   const sp = new Spinner();
@@ -76,16 +101,15 @@ export async function runAudit(cfg, domain, opts = {}) {
   // 4 — SEO data (DataForSEO)
   const loc = d.market.location_code, lang = "en";
   if (hasDFS) {
-    sp.start("SEO data: ranked keywords, competitors, backlinks (DataForSEO)…");
+    sp.start("SEO data: ranked keywords, backlinks (DataForSEO)…");
+    d.compCandidates = [];
     try { d.ranked = await dfs.rankedKeywords(cfg, domain, loc, lang, 50); }
     catch (e) { d.ranked = []; skip("ranked_keywords", e); }
-    try { d.compCandidates = await dfs.competitors(cfg, domain, loc, lang, 8); }
-    catch (e) { d.compCandidates = []; skip("competitors", e); }
     try {
       d.siteBacklinks = await dfs.backlinksSummary(cfg, domain);
       d.siteRank = await dfs.rankOverview(cfg, domain, loc, lang);
     } catch (e) { skip("site_metrics", e); }
-    sp.ok(`${(d.ranked || []).length} ranked keywords, ${(d.compCandidates || []).length} competitor candidates`);
+    sp.ok(`${(d.ranked || []).length} ranked keywords collected`);
   } else {
     d.ranked = []; d.compCandidates = [];
     warnings.push("DataForSEO key not set — keyword/SERP/competitor/backlink data skipped (run: do-audit init)");
@@ -165,26 +189,16 @@ export async function runAudit(cfg, domain, opts = {}) {
       .filter((r) => r && !r.error);
     sp.ok(`${d.serpResults.length} SERPs analyzed (incl. AI Overview presence)`);
 
-    // 6b — SERP-grounded competitor candidates when DataForSEO's competitor
-    // endpoint returned zero (small/new sites): the domains that actually rank
-    // for the shortlist ARE the candidates.
-    if (!(d.compCandidates || []).length && d.serpResults.length) {
-      const counts = new Map();
-      for (const r of d.serpResults) {
-        const seen = new Set();
-        for (const o of r.organic || []) {
-          const h = String(o.domain || "").replace(/^www\./, "").toLowerCase();
-          if (!h || h === domain || seen.has(h) || isNoiseDomain(h)) continue;
-          seen.add(h);
-          counts.set(h, (counts.get(h) || 0) + 1);
-        }
-      }
-      d.compCandidates = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-        .map(([dom, hits]) => ({ domain: dom, intersections: hits }));
+    // 6b — competitor discovery FROM THE MAIN KEYWORDS: aggregate every
+    // domain ranking across the 10 SERPs, rank by how many keywords each
+    // covers (tie-break: better average position), then let the LLM pick the
+    // true competitors from that list.
+    if (d.serpResults.length) {
+      d.compCandidates = serpCompetitorCandidates(d.serpResults, domain);
       d.candidateSource = "Google SERPs (DataForSEO)";
       if (d.compCandidates.length) {
-        sp.start("Selecting true competitors from the live SERPs…");
-        await pickCompetitors("from live Google SERPs");
+        sp.start("Selecting top competitors ranking for the main keywords…");
+        await pickCompetitors("top-ranking for the main keywords");
       }
     }
 
