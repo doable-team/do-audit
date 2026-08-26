@@ -13,7 +13,8 @@ import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
 import { llmResponsesDirect, serpCandidates, chatJSON, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
 import { renderNotes } from "./notes.js";
-import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
+import { printTerminalReport } from "./termreport.js";
+import { Spinner, yellow, cyan, gray, bold } from "./ui.js";
 
 const uniqPages = (tech, home, max) => {
   const seen = new Set(["/", ""]);
@@ -238,42 +239,31 @@ export async function runAudit(cfg, domain, opts = {}) {
   }));
   sp.ok(`Analysis complete — health score ${d.analysis.score ?? "?"}/100`);
 
-  // 11 — report
-  const outFile = path.resolve(opts.out || `audit-${domain.replace(/[^a-z0-9.-]/gi, "_")}-${d.date}.html`);
+  // 11 — the result renders in the terminal; HTML is generated on demand
+  // (interactive menu, or automatically with --out/--open/--json or piped).
+  printTerminalReport(d, warnings);
+  return { d, warnings };
+}
+
+// Write the designed HTML report + internal notes (+ raw JSON with opts.json).
+export function saveReportFiles(cfg, d, warnings, opts = {}) {
+  const outFile = path.resolve(opts.out ||
+    `audit-${d.domain.replace(/[^a-z0-9.-]/gi, "_")}-${d.date}.html`);
   fs.writeFileSync(outFile, renderReport(cfg, d));
   d.reportFile = path.basename(outFile);
   const notesFile = outFile.replace(/\.html$/, "") + "-notes.html";
   fs.writeFileSync(notesFile, renderNotes(cfg, d, warnings));
+  let jsonFile = null;
   if (opts.json) {
-    const jsonFile = outFile.replace(/\.html$/, "") + ".json";
+    jsonFile = outFile.replace(/\.html$/, "") + ".json";
     fs.writeFileSync(jsonFile, JSON.stringify({ ...d, warnings }, null, 2));
-    console.log(`  ${green("✓")} Raw data: ${cyan(jsonFile)}`);
   }
+  return { outFile, notesFile, jsonFile };
+}
 
-  hr();
-  const a = d.analysis, cnt = { critical: 0, high: 0, medium: 0, low: 0 };
-  for (const x of [...(a.technical_issues || []), ...(a.onpage_issues || [])]) {
-    const s = String(x.severity || "").toLowerCase();
-    if (s in cnt) cnt[s]++;
-  }
-  console.log(`
-  ${bold("Health score:")} ${a.score >= 75 ? green(a.score + "/100") : a.score >= 50 ? yellow(a.score + "/100") : bold(a.score + "/100")}
-  ${bold("Issues:")} ${cnt.critical} critical · ${cnt.high} high · ${cnt.medium} medium · ${cnt.low} low
-  ${bold("AI visibility:")} ${d.aiMetrics.visibility}% (${platforms.join(", ")})
-  ${bold("Report:")} ${cyan(outFile)}
-  ${bold("Notes:")} ${cyan(notesFile)} ${gray("(internal — assumptions to verify)")}
-  ${bold("Edit:")} ${gray("do-audit edit " + path.basename(outFile))}`);
-  if (warnings.length) {
-    console.log(`\n  ${yellow("Warnings")} ${gray("(data that could not be collected)")}`);
-    for (const w of warnings) console.log(gray("  · " + w));
-  }
-  console.log(`\n  ${gray("Fixing this is a workflow —")} ${bold("Visibility.so")} ${gray("runs SEO with human + AI agent teams:")}
-  ${cyan("https://visibility.so/?utm_source=do-audit&utm_medium=cli&utm_campaign=oss-cli")}\n`);
-
-  if (opts.open) {
-    const opener = process.platform === "darwin" ? "open"
-      : process.platform === "win32" ? "start" : "xdg-open";
-    spawn(opener, [outFile], { detached: true, stdio: "ignore", shell: process.platform === "win32" }).unref();
-  }
-  return { outFile, score: a.score };
+export function openInBrowser(target) {
+  const opener = process.platform === "darwin" ? "open"
+    : process.platform === "win32" ? "start" : "xdg-open";
+  spawn(opener, [target], { detached: true, stdio: "ignore",
+    shell: process.platform === "win32" }).unref();
 }

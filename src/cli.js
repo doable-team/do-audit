@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { loadConfig, loadStored, setConfigValue, CONFIG_PATH } from "./config.js";
 import { PROVIDERS, configuredProviders } from "./ai.js";
 import { onboard, maybeOnboard } from "./onboard.js";
-import { runAudit } from "./audit.js";
-import { banner, bold, cyan, gray, green, maskKey, closePrompts } from "./ui.js";
+import { runAudit, saveReportFiles, openInBrowser } from "./audit.js";
+import { banner, bold, cyan, gray, green, yellow, maskKey, ask, select, closePrompts } from "./ui.js";
 
 const VERSION = JSON.parse(fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")).version;
@@ -14,7 +14,9 @@ const VERSION = JSON.parse(fs.readFileSync(
 const HELP = `
   ${bold("Usage")}
 
-    do-audit <domain>            Run a full SEO audit (report + internal notes)
+    do-audit <domain>            Run a full SEO audit — results render in the
+                                 terminal, then a menu: save as HTML, audit
+                                 another site, or exit
     do-audit edit [report.html]  Edit a report in the browser (local server,
                                  rich text, drag sections, version history)
     do-audit init                Connect / update API keys (interactive)
@@ -24,8 +26,8 @@ const HELP = `
 
   ${bold("Flags")}
 
-    --open           Open the HTML report in your browser when done
-    --out <file>     Report output path (default: ./audit-<domain>-<date>.html)
+    --open           Auto-save the HTML report and open it in your browser
+    --out <file>     Auto-save to this path (default: ./audit-<domain>-<date>.html)
     --market <ISO>   Target market, e.g. US, GB, IN (default: auto-detected)
     --pages <n>      Extra internal pages to crawl (default: 4)
     --json           Also write the raw collected data as JSON
@@ -135,6 +137,55 @@ export async function run(argv) {
   banner(VERSION);
   let cfg = loadConfig();
   if (!configuredProviders(cfg).length) { cfg = await maybeOnboard(cfg); cfg = loadConfig(); }
+  await auditFlow(cfg, domain, opts);
   closePrompts();
-  await runAudit(cfg, domain, opts);
+}
+
+const promoLine = () =>
+  console.log(`\n  ${gray("Fixing this is a workflow —")} ${bold("Visibility.so")} ${gray("runs SEO with human + AI agent teams:")}
+  ${cyan("https://visibility.so/?utm_source=do-audit&utm_medium=cli&utm_campaign=oss-cli")}\n`);
+
+// The interactive session: audit → results in the terminal → menu
+// (save HTML / open / audit another site / exit) → loop.
+async function auditFlow(cfg, domain, opts) {
+  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  for (;;) {
+    const { d, warnings } = await runAudit(cfg, domain, opts);
+    let saved = null;
+    if (opts.out || opts.open || opts.json || !interactive) {
+      saved = saveReportFiles(cfg, d, warnings, opts);
+      console.log(`  ${green("✓")} Report: ${cyan(saved.outFile)}
+  ${green("✓")} Notes:  ${cyan(saved.notesFile)}${saved.jsonFile ? `\n  ${green("✓")} Data:   ${cyan(saved.jsonFile)}` : ""}`);
+      if (opts.open) openInBrowser(saved.outFile);
+    }
+    if (!interactive) { promoLine(); return; }
+
+    for (;;) {
+      const items = saved
+        ? [{ label: "Open report in browser", hint: gray(path.basename(saved.outFile)) }]
+        : [{ label: "Get report as HTML", hint: gray("save the designed report + internal notes") }];
+      items.push({ label: "Audit another site" }, { label: "Exit" });
+      console.log();
+      const pick = await select("What would you like to do next?", items);
+      const label = items[pick].label;
+      if (label === "Get report as HTML") {
+        saved = saveReportFiles(cfg, d, warnings, opts);
+        console.log(`\n  ${green("✓")} Report saved: ${cyan(saved.outFile)}
+  ${green("✓")} Internal notes: ${cyan(saved.notesFile)}
+  ${gray("Edit it anytime with: do-audit edit " + path.basename(saved.outFile))}`);
+      } else if (label === "Open report in browser") {
+        openInBrowser(saved.outFile);
+        console.log(gray("\n  Opened in browser."));
+      } else if (label === "Audit another site") {
+        const next = cleanDomain(await ask("Domain to audit:"));
+        if (!next || !next.includes(".")) { console.log(yellow("  Not a valid domain.")); continue; }
+        domain = next;
+        console.log();
+        break; // back to the outer loop → run the next audit
+      } else {
+        promoLine();
+        return;
+      }
+    }
+  }
 }
