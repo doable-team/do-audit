@@ -137,26 +137,41 @@ export async function runAudit(cfg, domain, opts = {}) {
     } catch (e) { skip("strategy retry", e); }
   }
   d.brief = merged;
-  sp.ok(`${(d.brief.shortlist || []).length} main keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
+  // With DataForSEO the real competitors are resolved from the main keywords'
+  // SERPs in step 6b — don't display the provisional LLM guess.
+  sp.ok(`${(d.brief.shortlist || []).length} main keywords` +
+    (hasDFS ? gray(" · competitors: resolving from live SERPs next")
+      : ` · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`));
 
-  // Shared: the LLM picks up to 3 TRUE competitors from ranking candidates.
+  // Shared: the LLM picks up to 3 TRUE competitors from ranking candidates,
+  // and regenerates the AI-visibility test prompts so the comparison prompt
+  // references the REAL competitors — the picked set is used everywhere:
+  // keyword-table columns, authority benchmark, DR, share-of-voice, prompts.
   const pickCompetitors = async (sourceLabel) => {
     try {
       const pick = await chatJSON(cfg,
         "You are an expert SEO strategist. Reply with strict JSON only. " +
         "Never invent data; base everything only on the evidence provided.",
         JSON.stringify({
-          task: "These domains currently rank in top web results for the business's target keywords " +
-            "(intersections = how many of the searched keywords each ranked for). Pick up to 3 TRUE " +
-            "business competitors — real companies competing for the same customers; exclude " +
-            "marketplaces, directories, review sites, media/publishers, social platforms and giant " +
-            "generalists. Return {competitors:[domains], assumptions:[]}",
+          task: "These domains currently rank in top web results for the business's main keywords " +
+            "(intersections = how many of the searched keywords each ranked for). " +
+            "(1) Pick up to 3 TRUE business competitors — real companies competing for the same " +
+            "customers; exclude marketplaces, directories, review sites, media/publishers, social " +
+            "platforms and giant generalists. " +
+            "(2) Rewrite the 5 AI-visibility test prompts via query fan-out, one each: recommendation, " +
+            "comparison, informational, local-or-audience, transactional — phrased as a real user would " +
+            "ask an AI assistant, NEVER naming the audited brand; the comparison prompt SHOULD name the " +
+            "chosen competitors. " +
+            "Return {competitors:[domains], prompts:[{prompt,category}], assumptions:[]}",
           business: d.brief.business_summary, brand: d.brief.brand_name, domain,
+          main_keywords: (d.brief.shortlist || []).map((k) => k.keyword),
           ranking_candidates: d.compCandidates,
-        }), 1000);
-      const picked = normalizeBrief({ competitors: pick?.competitors }).competitors.slice(0, 3);
-      if (picked.length) d.brief.competitors = picked;
-      d.brief.assumptions.push(...normalizeBrief({ assumptions: pick?.assumptions }).assumptions);
+        }), 1600);
+      const norm = normalizeBrief({ competitors: pick?.competitors, prompts: pick?.prompts,
+        assumptions: pick?.assumptions });
+      if (norm.competitors.length) d.brief.competitors = norm.competitors.slice(0, 3);
+      if (norm.prompts.length >= 3) d.brief.prompts = norm.prompts.slice(0, 5);
+      d.brief.assumptions.push(...norm.assumptions);
     } catch (e) { skip("competitor pick", e); }
     sp.ok(`Competitors (${sourceLabel}): ${(d.brief.competitors || []).join(", ") || "none"}`);
   };
