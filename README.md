@@ -57,7 +57,7 @@ That's it. The report lands in your current directory as `audit-example.com-<dat
 
 ## API keys
 
-You bring your own keys — `do-audit init` walks you through connecting them. Only **one AI provider** is required; everything else is optional and the audit degrades gracefully.
+You bring your own keys — `do-audit init` walks you through connecting them with an arrow-key menu (↑/↓ + Enter): pick a provider, paste the key, optionally set a custom model. Only **one AI provider** is required — the data integrations can be skipped in one step for an AI-only audit.
 
 | Key | Used for | Required | Get it |
 | --- | --- | --- | --- |
