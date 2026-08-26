@@ -35,23 +35,35 @@ export const configuredProviders = (cfg) =>
 const modelFor = (cfg, id) => cfg.models?.[id] || PROVIDERS[id].model;
 
 // Ask one provider. Returns { text, cited:[urls] }.
-export async function chat(cfg, id, system, user, { maxTokens = 1200, json = false } = {}) {
+// With web:true the provider's live web search is enabled where supported
+// (OpenAI search models, Anthropic web_search tool, Gemini Google-Search
+// grounding, OpenRouter :online, xAI Live Search; Perplexity always searches).
+// This matters for AI-visibility testing: without search, models can only
+// mention brands they memorized in training.
+export async function chat(cfg, id, system, user, { maxTokens = 1200, json = false, web = false } = {}) {
   const p = PROVIDERS[id];
   if (!p) throw new Error(`Unknown provider: ${id}`);
   const key = cfg.keys?.[p.keyName];
   if (!key) throw new Error(`No API key configured for ${p.label}`);
-  const model = modelFor(cfg, id);
+  let model = modelFor(cfg, id);
 
   if (p.type === "anthropic") {
     const res = await fetch(p.url, {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({ model, max_tokens: maxTokens, system,
-        messages: [{ role: "user", content: user }] }),
+        messages: [{ role: "user", content: user }],
+        ...(web ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}) }),
     });
     if (!res.ok) throw new Error(`${p.label} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = await res.json();
-    return { text: (body.content || []).map((b) => b.text || "").join(""), cited: [] };
+    const cited = [];
+    for (const b of body.content || []) {
+      for (const c of b.citations || []) if (c.url) cited.push(c.url);
+      if (Array.isArray(b.content)) for (const r of b.content) if (r.url) cited.push(r.url);
+    }
+    return { text: (body.content || []).filter((b) => b.type === "text")
+      .map((b) => b.text || "").join(""), cited };
   }
 
   if (p.type === "gemini") {
@@ -61,17 +73,26 @@ export async function chat(cfg, id, system, user, { maxTokens = 1200, json = fal
         body: JSON.stringify({
           contents: [{ parts: [{ text: user }] }],
           systemInstruction: { parts: [{ text: system }] },
+          ...(web ? { tools: [{ google_search: {} }] } : {}),
           generationConfig: { maxOutputTokens: maxTokens,
-            ...(json ? { responseMimeType: "application/json" } : {}) },
+            ...(json && !web ? { responseMimeType: "application/json" } : {}) },
         }),
       });
     if (!res.ok) throw new Error(`${p.label} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = await res.json();
-    const parts = body.candidates?.[0]?.content?.parts || [];
-    return { text: parts.map((x) => x.text || "").join(""), cited: [] };
+    const cand = body.candidates?.[0];
+    const cited = (cand?.groundingMetadata?.groundingChunks || [])
+      .map((c) => c.web?.uri).filter(Boolean);
+    return { text: (cand?.content?.parts || []).map((x) => x.text || "").join(""), cited };
   }
 
   // OpenAI-compatible (OpenAI, Perplexity, OpenRouter, DeepSeek, Groq, xAI)
+  if (web) {
+    // OpenAI's web search lives in dedicated search models; keep a custom
+    // model if the user already chose a search variant.
+    if (id === "openai" && !/search/.test(model)) model = "gpt-4o-mini-search-preview";
+    if (id === "openrouter" && !model.endsWith(":online")) model = model + ":online";
+  }
   const res = await fetch(p.url, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json",
@@ -81,7 +102,9 @@ export async function chat(cfg, id, system, user, { maxTokens = 1200, json = fal
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
       max_tokens: maxTokens,
-      ...(json && p.jsonMode !== false ? { response_format: { type: "json_object" } } : {}),
+      ...(web && id === "openai" ? { web_search_options: {} } : {}),
+      ...(web && id === "xai" ? { search_parameters: { mode: "auto", return_citations: true } } : {}),
+      ...(json && p.jsonMode !== false && !web ? { response_format: { type: "json_object" } } : {}),
     }),
   });
   if (!res.ok) throw new Error(`${p.label} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -182,7 +205,7 @@ export async function visibilityTests(cfg, prompts, brand, domain, onProgress) {
     const { text, cited } = await chat(cfg, id,
       "You are a helpful assistant. Answer naturally, as you would for a real user. " +
       "Name specific companies, products or websites where relevant.",
-      prompt.prompt || prompt, { maxTokens: 600 });
+      prompt.prompt || prompt, { maxTokens: 700, web: true });
     onProgress?.(++done, combos.length);
     const hay = (text || "").toLowerCase();
     const mentioned = hay.includes(String(brand).toLowerCase()) || hay.includes(domain.toLowerCase());

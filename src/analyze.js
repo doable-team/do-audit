@@ -1,30 +1,53 @@
-// LLM stages: the research brief (business summary, market, competitors,
-// keyword shortlist, AI-visibility test prompts) and the final audit analysis.
+// LLM stages, mirroring the two-stage research the audit pipeline needs:
+//   understand — business, brand and target market from the crawled pages only
+//   strategy   — competitors, keyword shortlist and AI test prompts, chosen
+//                AFTER the SEO data is in (so the LLM curates real data)
+//   analyze    — the final audit analysis
 import { chatJSON } from "./ai.js";
 
-export async function brief(cfg, domain, home, tech, ranked, hasDataForSEO) {
+export async function understand(cfg, home, pages) {
   return chatJSON(cfg,
-    "You are an expert SEO strategist. Strict JSON only. Base everything on the provided data; " +
-    "anything uncertain goes into assumptions as a quoted sentence.",
+    "You are an expert SEO strategist. Reply with strict JSON only. " +
+    "Never invent data; base everything only on the evidence provided.",
     JSON.stringify({
-      task:
-        "From the homepage snapshot: (1) write a 2-3 sentence business_summary and extract brand_name; " +
-        "(2) determine the primary target market as ISO-3166 alpha-2 (market_iso) with a one-line market_reason; " +
-        "(3) list 3 direct competitor domains (real companies competing for the same customers" +
-        (hasDataForSEO ? ", refine the candidates given" : "") + "); " +
-        "(4) build shortlist: the 10 most commercially relevant keywords " +
-        (hasDataForSEO
-          ? "chosen from ranked_keywords (keep their volume/difficulty/rank numbers)"
-          : "as {keyword} objects (no volume data available — leave volume/difficulty/rank null)") + "; " +
-        "(5) write 5 AI-visibility test prompts via query fan-out, one each: recommendation, comparison, " +
-        "best-of list, problem-solving, local-or-niche discovery — phrased as a real user would ask an AI assistant, " +
-        "NEVER naming the brand itself. " +
-        "Return {brand_name, business_summary, market_iso, market_reason, competitors:[domains], " +
-        "shortlist:[{keyword,volume,difficulty,rank}], prompts:[{prompt,category}], assumptions:[]}",
-      domain, homepage: home, tech_summary: {
-        robots: tech?.robots, sitemap: tech?.sitemap, llmsTxt: tech?.llmsTxt,
-      },
+      task: "From the crawled pages: (1) describe the business precisely (what it sells, audience, " +
+        "geography) using only what the pages state; (2) identify the brand name; (3) determine the PRIMARY " +
+        "target market country as ISO-3166 alpha-2 (evidence: addresses, phone country codes, currency, " +
+        "language, audience/locations named on the pages; if genuinely global use 'US') plus a one-sentence " +
+        "market_reason citing that evidence; (4) list any assumptions you had to make, each as a quoted sentence. " +
+        "Return {business_summary, brand_name, market_country_iso, market_reason, assumptions:[]}",
+      homepage: { title: home?.title, description: home?.metaDescription,
+        h1: home?.h1, h2: home?.h2, words: home?.wordCount },
+      pages: (pages || []).map((p) => ({ url: p.url, title: p.title, h1: p.h1 })),
+    }), 2000);
+}
+
+export async function strategy(cfg, { business, brand, market, ranked, candidates, hasData }) {
+  return chatJSON(cfg,
+    "You are an expert SEO strategist. Reply with strict JSON only. " +
+    "Never invent data; base everything only on the evidence provided.",
+    JSON.stringify({
+      task: "Given the verified business" + (hasData ? " and its keyword data for the target market" : "") +
+        ": (1) pick up to 3 TRUE business competitors " +
+        (hasData
+          ? "from candidates (exclude marketplaces/media/giants)"
+          : "from your knowledge of this business's space (real companies competing for the same customers; " +
+            "exclude marketplaces/media/giants)") + "; " +
+        "(2) build a shortlist of exactly 10 MID-TAIL or LONG-TAIL keywords (2+ words, clear intent, no broad " +
+        "head terms) " +
+        (hasData
+          ? "mixing currently-ranking, striking-distance (rank 4-30) and opportunity terms relevant to the " +
+            "target market — carry over each keyword's volume/difficulty/rank from ranked_keywords when present"
+          : "this business should target in its market (no keyword data available — set volume, difficulty " +
+            "and rank to null)") + "; " +
+        "(3) write 5 AI-visibility test prompts via query fan-out, one each: recommendation, comparison, " +
+        "informational, local-or-audience, transactional — phrased as a real user would ask an AI assistant, " +
+        "NEVER naming the brand itself; (4) list any assumptions, each as a quoted sentence. " +
+        "Return {competitors:[domains], shortlist:[{keyword,volume,difficulty,rank}], prompts:[{prompt,category}], assumptions:[]}",
+      business, brand,
+      target_market: market,
       ranked_keywords: (ranked || []).slice(0, 40),
+      competitor_candidates: candidates || [],
     }), 3000);
 }
 

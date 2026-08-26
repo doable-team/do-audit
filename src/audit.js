@@ -1,12 +1,14 @@
-// The audit pipeline: crawl → performance → SEO data → AI visibility →
-// LLM analysis → HTML report. Every data source degrades gracefully when its
-// key is missing; only one AI provider key is required.
+// The audit pipeline, mirroring the proven step order of the original agent:
+// crawl → performance → understand (LLM) → SEO data → strategy (LLM curates
+// competitors/keywords/prompts from the real data) → SERP checks → authority →
+// AI visibility (web-search enabled) → analysis → HTML report.
+// Every data source degrades gracefully when its key is missing.
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fetchPage, techCheck, psi, ahrefsDR } from "./crawl.js";
 import * as dfs from "./dataforseo.js";
-import { brief, analyze } from "./analyze.js";
+import { understand, strategy, analyze } from "./analyze.js";
 import { visibilityTests, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
 import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
@@ -15,6 +17,7 @@ const uniqPages = (tech, home, max) => {
   const seen = new Set(["/", ""]);
   const out = [];
   const host = home?.finalUrl ? new URL(home.finalUrl).origin : null;
+  // Sitemap URLs first (the agent's source), then internal links as fallback.
   const candidates = [...(tech.sitemapUrls || []), ...(home?.internalLinks || [])];
   for (const l of candidates) {
     let u;
@@ -59,73 +62,75 @@ export async function runAudit(cfg, domain, opts = {}) {
   if (d.psi?.error) { sp.warn(`PageSpeed skipped — ${d.psi.error}`); skip("psi", d.psi.error); }
   else sp.ok(`Performance score ${d.psi.score ?? "—"}/100 (mobile)`);
 
-  // 3 — research brief (market, brand, competitors, keywords, AI prompts)
-  sp.start("AI research brief (business, market, keywords, test prompts)…");
-  d.brief = await brief(cfg, domain, d.home, d.tech, null, hasDFS);
-  const iso = (opts.market || cfg.market || d.brief.market_iso || "US").toUpperCase();
+  // 3 — understand: business, brand, target market (from crawled pages only)
+  sp.start("Understanding the business (AI)…");
+  d.brief = await understand(cfg, d.home, d.pages);
+  const iso = (opts.market || cfg.market || d.brief.market_country_iso || "US").toUpperCase();
   d.market = { iso, location_code: dfs.MARKETS[iso] || dfs.MARKETS.US,
     reason: opts.market || cfg.market ? "set by user" : d.brief.market_reason || "" };
-  sp.ok(`Brief ready — market ${iso}, brand "${d.brief.brand_name || domain}"`);
+  sp.ok(`Business understood — brand "${d.brief.brand_name || domain}", market ${iso}`);
 
   // 4 — SEO data (DataForSEO)
+  const loc = d.market.location_code, lang = "en";
   if (hasDFS) {
-    const loc = d.market.location_code, lang = "en";
-    sp.start("Keyword rankings (DataForSEO)…");
-    try {
-      const ranked = await dfs.rankedKeywords(cfg, domain, loc, lang);
-      if (ranked.length) {
-        const seen = new Set();
-        d.brief.shortlist = ranked
-          .filter((k) => k.keyword && !seen.has(k.keyword) && seen.add(k.keyword))
-          .slice(0, 10);
-      }
-      sp.ok(`${ranked.length} ranked keywords found`);
-    } catch (e) { sp.warn("Ranked keywords skipped"); skip("ranked_keywords", e); }
-
-    sp.start("Competitor discovery (DataForSEO)…");
-    try {
-      d.compCandidates = await dfs.competitors(cfg, domain, loc, lang);
-      const top = d.compCandidates
-        .filter((c) => c.domain && c.domain !== domain)
-        .sort((a, b) => (b.intersections || 0) - (a.intersections || 0)).slice(0, 3);
-      if (top.length) d.brief.competitors = top.map((c) => c.domain);
-      sp.ok(`Competitors: ${(d.brief.competitors || []).join(", ") || "none found"}`);
-    } catch (e) { sp.warn("Competitor discovery skipped"); skip("competitors", e); }
-
-    const kws = (d.brief.shortlist || []).slice(0, 5).map((k) => k.keyword).filter(Boolean);
-    sp.start(`Live SERP checks for ${kws.length} keywords…`);
-    d.serpResults = (await pool(kws, 2, (kw) => dfs.serp(cfg, kw, loc, lang)))
-      .filter((r) => r && !r.error);
-    sp.ok(`${d.serpResults.length} SERPs analyzed (incl. AI Overview presence)`);
-
-    sp.start("Backlinks & authority metrics…");
+    sp.start("SEO data: ranked keywords, competitors, backlinks (DataForSEO)…");
+    try { d.ranked = await dfs.rankedKeywords(cfg, domain, loc, lang, 50); }
+    catch (e) { d.ranked = []; skip("ranked_keywords", e); }
+    try { d.compCandidates = await dfs.competitors(cfg, domain, loc, lang, 8); }
+    catch (e) { d.compCandidates = []; skip("competitors", e); }
     try {
       d.siteBacklinks = await dfs.backlinksSummary(cfg, domain);
       d.siteRank = await dfs.rankOverview(cfg, domain, loc, lang);
-      d.compData = (await pool((d.brief.competitors || []).slice(0, 3), 2, async (c) => ({
-        ...(await dfs.backlinksSummary(cfg, c)),
-        ...(await dfs.rankOverview(cfg, c, loc, lang)),
-      }))).filter((r) => r && !r.error);
-      sp.ok("Authority data collected for site + competitors");
-    } catch (e) { sp.warn("Backlink data skipped"); skip("backlinks", e); }
+    } catch (e) { skip("site_metrics", e); }
+    sp.ok(`${(d.ranked || []).length} ranked keywords, ${(d.compCandidates || []).length} competitor candidates`);
   } else {
+    d.ranked = []; d.compCandidates = [];
     warnings.push("DataForSEO key not set — keyword/SERP/competitor/backlink data skipped (run: do-audit init)");
     console.log(`  ${yellow("!")} ${gray("No DataForSEO key — skipping keywords, SERPs, competitors, backlinks")}`);
   }
 
-  // 5 — Ahrefs DR
+  // 5 — strategy: the LLM curates competitors, shortlist and AI test prompts
+  //     from the real data (true competitors only, mid/long-tail keywords).
+  sp.start("SEO strategy: competitors, keyword shortlist, test prompts (AI)…");
+  const strat = await strategy(cfg, {
+    business: d.brief.business_summary, brand: d.brief.brand_name,
+    market: d.market, ranked: d.ranked, candidates: d.compCandidates, hasData: hasDFS,
+  });
+  d.brief = { ...d.brief, ...strat,
+    assumptions: [...(d.brief.assumptions || []), ...(strat.assumptions || [])] };
+  sp.ok(`${(d.brief.shortlist || []).length} shortlist keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
+
+  // 6 — live SERP checks for the FULL shortlist
+  if (hasDFS) {
+    const kws = (d.brief.shortlist || []).map((k) => k.keyword).filter(Boolean);
+    sp.start(`Live SERP checks for ${kws.length} keywords…`);
+    d.serpResults = (await pool(kws, 2, (kw) => dfs.serp(cfg, kw, loc, lang, 20)))
+      .filter((r) => r && !r.error);
+    sp.ok(`${d.serpResults.length} SERPs analyzed (incl. AI Overview presence)`);
+
+    // 7 — authority: backlinks + rank overview for the chosen competitors
+    sp.start("Authority data for competitors…");
+    d.compData = (await pool((d.brief.competitors || []).slice(0, 3), 2, async (c) => ({
+      domain: c,
+      ...(await dfs.backlinksSummary(cfg, c).catch((e) => (skip(`bl ${c}`, e), {}))),
+      ...(await dfs.rankOverview(cfg, c, loc, lang).catch((e) => (skip(`ro ${c}`, e), {}))),
+    }))).filter(Boolean);
+    sp.ok(`${d.compData.length} competitors profiled`);
+  }
+
+  // 8 — Ahrefs DR for site + competitors
   if (cfg.keys?.ahrefs) {
     sp.start("Ahrefs domain rating…");
     d.dr = {};
     for (const dom of [domain, ...(d.brief.competitors || []).slice(0, 3)]) {
-      try { d.dr[dom] = (await ahrefsDR(cfg, dom)).dr; } catch (e) { skip("ahrefs", e); }
+      try { d.dr[dom] = (await ahrefsDR(cfg, dom)).dr; } catch (e) { skip(`dr ${dom}`, e); }
     }
     sp.ok("Domain ratings collected");
   }
 
-  // 6 — AI visibility across every configured provider
+  // 9 — AI visibility across every configured provider, with live web search
   const prompts = (d.brief.prompts || []).slice(0, 5);
-  sp.start(`AI visibility: ${prompts.length} prompts × ${aiIds.length} platforms…`);
+  sp.start(`AI visibility: ${prompts.length} prompts × ${aiIds.length} platforms (web search on)…`);
   d.aiResults = await visibilityTests(cfg, prompts, d.brief.brand_name || domain, domain,
     (done, total) => sp.update(`AI visibility: ${done}/${total} responses…`));
   const matrixMap = {};
@@ -150,7 +155,7 @@ export async function runAudit(cfg, domain, opts = {}) {
   };
   sp.ok(`AI visibility ${d.aiMetrics.visibility}% across ${platforms.length} platforms`);
 
-  // 7 — analysis
+  // 10 — analysis
   sp.start("Writing the audit (AI analysis — this can take a minute)…");
   d.analysis = await analyze(cfg, {
     domain, business: d.brief.business_summary, target_market: d.market,
@@ -165,7 +170,7 @@ export async function runAudit(cfg, domain, opts = {}) {
   });
   sp.ok(`Analysis complete — health score ${d.analysis.score ?? "?"}/100`);
 
-  // 8 — report
+  // 11 — report
   const outFile = path.resolve(opts.out || `audit-${domain.replace(/[^a-z0-9.-]/gi, "_")}-${d.date}.html`);
   fs.writeFileSync(outFile, renderReport(cfg, d));
   if (opts.json) {
