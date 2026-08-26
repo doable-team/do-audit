@@ -212,7 +212,6 @@ export function renderReport(cfg, d) {
   const iBot = `<svg class="hi hi-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>`;
   const iArrow = `<svg class="hi hi-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
   sections.push(`<section id="next" class="reveal cta">
-    <span class="cta-tag"><span class="cta-new">New</span>Visibility.so V2 is now live!</span>
     <h2 class="cta-head">The Future of SEO is<br>
     <span class="cta-word">${iBrain}Human</span> + <span class="cta-word">${iBot}Agentic.</span></h2>
     <p class="cta-pitch">This audit is a snapshot — fixing it is a workflow. <b>Visibility.so</b> gives your team an SEO
@@ -386,10 +385,6 @@ td.no{color:var(--warn);background:var(--warnbg);font-weight:700;text-align:cent
 .crit-t{color:var(--crit)}.warn-t{color:var(--warn)}.good-t{color:var(--good)}.neutral-t{color:var(--ink)}
 section.cta{position:relative;background:#000;border-color:#000;color:#fff;text-align:center;padding:72px 48px}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-.cta-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);
--webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
-border-radius:.5rem;padding:6px 10px;margin-bottom:24px;font-size:12px;font-weight:500;color:#8E8B82}
-.cta-new{background:#F97316;color:#fff;border-radius:.375rem;font-size:12px;font-weight:500;padding:2px 6px}
 .cta-head{font-family:'Instrument Serif',Georgia,serif;font-weight:500;color:#fff;font-size:clamp(38px,6vw,64px);letter-spacing:-2px;line-height:1.15;margin-bottom:14px}
 .cta-word{display:inline-flex;align-items:center}
 .hi{flex:none}
