@@ -10,7 +10,7 @@ import { fetchPage, techCheck, psi, ahrefsDR } from "./crawl.js";
 import * as dfs from "./dataforseo.js";
 import { understand, strategy, analyze } from "./analyze.js";
 import { normalizeBrief, normalizeAnalysis } from "./coerce.js";
-import { llmResponsesDirect, configuredProviders, PROVIDERS, pool } from "./ai.js";
+import { llmResponsesDirect, serpCandidates, chatJSON, configuredProviders, PROVIDERS, pool } from "./ai.js";
 import { renderReport } from "./report.js";
 import { renderNotes } from "./notes.js";
 import { Spinner, green, yellow, cyan, gray, bold, hr } from "./ui.js";
@@ -101,6 +101,43 @@ export async function runAudit(cfg, domain, opts = {}) {
   d.brief = normalizeBrief({ ...d.brief, ...strat,
     assumptions: [...(d.brief.assumptions || []), ...(strat.assumptions || [])] });
   sp.ok(`${(d.brief.shortlist || []).length} shortlist keywords · competitors: ${(d.brief.competitors || []).join(", ") || "none"}`);
+
+  // 5b — no-DataForSEO competitor grounding: instead of trusting the LLM's
+  // memory, search the researched keywords live and see which domains actually
+  // rank today, then have the LLM pick true competitors from those.
+  if (!hasDFS) {
+    const kws = (d.brief.shortlist || []).slice(0, 5).map((k) => k.keyword).filter(Boolean);
+    sp.start(`Competitor discovery via live search: ${kws.length} keywords…`);
+    const { provider, candidates } = await serpCandidates(cfg, kws, domain,
+      (done, total) => sp.update(`Competitor discovery via live search: ${done}/${total} keywords…`));
+    if (candidates.length) {
+      d.compCandidates = candidates;
+      d.candidateSource = provider;
+      try {
+        const pick = await chatJSON(cfg,
+          "You are an expert SEO strategist. Reply with strict JSON only. " +
+          "Never invent data; base everything only on the evidence provided.",
+          JSON.stringify({
+            task: "These domains currently rank in top web results for the business's target keywords " +
+              "(intersections = how many of the searched keywords each ranked for). Pick up to 3 TRUE " +
+              "business competitors — real companies competing for the same customers; exclude " +
+              "marketplaces, directories, review sites, media/publishers, social platforms and giant " +
+              "generalists. Return {competitors:[domains], assumptions:[]}",
+            business: d.brief.business_summary, brand: d.brief.brand_name, domain,
+            ranking_candidates: candidates,
+          }), 1000);
+        const picked = normalizeBrief({ competitors: pick?.competitors }).competitors.slice(0, 3);
+        if (picked.length) d.brief.competitors = picked;
+        d.brief.assumptions.push(...normalizeBrief({ assumptions: pick?.assumptions }).assumptions);
+      } catch (e) { skip("competitor pick", e); }
+      sp.ok(`Competitors (from live top results via ${provider}): ${(d.brief.competitors || []).join(", ") || "none"}`);
+    } else if (provider) {
+      sp.warn("Live-search competitor discovery found no candidates — keeping AI-suggested competitors");
+    } else {
+      sp.warn("No web-search-capable AI provider connected — competitors are AI-suggested, not ranking-verified");
+      warnings.push("competitor discovery: no search-capable provider (connect Perplexity/OpenAI/Gemini for ranking-based discovery)");
+    }
+  }
 
   // 6 — live SERP checks for the FULL shortlist
   if (hasDFS) {

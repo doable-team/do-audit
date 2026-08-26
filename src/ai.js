@@ -205,6 +205,57 @@ export async function pool(items, limit, fn) {
   return results;
 }
 
+// Providers able to run live web searches, in preference order (used for the
+// no-DataForSEO competitor-discovery fallback).
+const SEARCH_PREF = ["perplexity", "openai", "gemini", "xai", "openrouter", "anthropic"];
+export function searchProvider(cfg) {
+  const ids = configuredProviders(cfg);
+  return SEARCH_PREF.find((id) => ids.includes(id)) || null;
+}
+
+// Extract candidate domains from one search response: cited URLs are the
+// trusted signal (real search results); domains named in the text are a
+// secondary signal. The audited domain and platform noise are dropped.
+const NOISE = /(^|\.)(google|bing|duckduckgo|youtube|facebook|linkedin|x|twitter|instagram|tiktok|wikipedia|reddit|quora|medium|pinterest|amazon|apple|github|g2|capterra|trustpilot|yelp)\./;
+export function extractDomains(text, cited, domain) {
+  const found = new Set();
+  for (const u of cited || []) {
+    try { found.add(new URL(u).hostname.replace(/^www\./, "").toLowerCase()); } catch {}
+  }
+  for (const m of String(text || "").matchAll(/\b([a-z0-9][a-z0-9-]{0,62}(?:\.[a-z0-9-]{2,})+)\b/gi)) {
+    const h = m[1].toLowerCase().replace(/^www\./, "");
+    if (/\.(com|io|co|net|org|ai|app|dev|so|in|us|uk|ca|au|de|fr|es|it|nl|se|ae)$/.test(h)) found.add(h);
+  }
+  found.delete(String(domain).toLowerCase());
+  return [...found].filter((h) => !NOISE.test(h + "."));
+}
+
+// No-DataForSEO competitor discovery: run the shortlist keywords through a
+// web-search-capable provider and count which domains keep appearing in the
+// top results. Returns candidates shaped like DataForSEO's competitor list.
+export async function serpCandidates(cfg, keywords, domain, onProgress) {
+  const id = searchProvider(cfg);
+  if (!id || !keywords.length) return { provider: null, candidates: [] };
+  const counts = new Map();
+  let done = 0;
+  await pool(keywords, 2, async (kw) => {
+    try {
+      const { text, cited } = await chat(cfg, id,
+        "You are a web search assistant. Use web search and answer factually from the results.",
+        `Search the web for: "${kw}". List the top organic search results — site domains only, one per line.`,
+        { maxTokens: 500, web: true });
+      for (const h of extractDomains(text, cited, domain)) {
+        counts.set(h, (counts.get(h) || 0) + 1);
+      }
+    } catch {}
+    onProgress?.(++done, keywords.length);
+  });
+  const candidates = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([dom, hits]) => ({ domain: dom, intersections: hits }));
+  return { provider: PROVIDERS[id].label, candidates };
+}
+
 // Fallback AI-visibility path when no DataForSEO key is configured: ask the
 // user's own connected providers directly (with live web search) and return
 // raw responses in the same shape the DataForSEO path produces —

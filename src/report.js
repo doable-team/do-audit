@@ -106,7 +106,8 @@ export function renderReport(cfg, d) {
   const sovTotal = (a.sov || []).reduce((s, b) => s + (b.mentions || 0), 0) || 1;
   const platforms = Object.keys(ai.perPlatform || {});
   const hasKwData = shortlist.length > 0;
-  const hasCompData = (d.compData || []).length > 0 || (d.compCandidates || []).length > 0;
+  const hasCandidates = (d.compCandidates || []).length > 0;
+  const hasAuthority = (d.compData || []).length > 0;
 
   let n = 0;
   const sec = (id, eyebrow, body) =>
@@ -147,14 +148,21 @@ export function renderReport(cfg, d) {
       <p class="muted small">Volume = monthly Google searches · KD = difficulty (0–100)${d.hasDataForSEO ? ` · Rank data: DataForSEO (live, ${today}, market: ${esc(d.market?.iso || "US")})` : " · No keyword data source configured — keywords are AI-suggested"}</p>`));
   }
 
-  if (hasCompData) {
+  if (hasCandidates) {
+    const chosen = (d.compCandidates || []).filter((c) => compDomains.includes(c.domain));
+    const rows = chosen.length ? chosen : (d.compCandidates || []).slice(0, 5);
     sections.push(sec("competitors", "Competitive Landscape",
       `<h2>Competitor Research</h2><p class="lead">${esc(a.competitor_summary || "")}</p>
-      ${table(["Competitor", "Shared KW", "Organic KW", "Est. Traffic/mo"],
-        (d.compCandidates || []).filter((c) => compDomains.includes(c.domain))
-          .map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td>
-          <td class="num">${fmt(c.organic_keywords)}</td><td class="num">${fmt(c.est_traffic)}</td></tr>`).join(""), [1, 2, 3])}`));
+      ${d.hasDataForSEO
+        ? table(["Competitor", "Shared KW", "Organic KW", "Est. Traffic/mo"],
+            rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td>
+            <td class="num">${fmt(c.organic_keywords)}</td><td class="num">${fmt(c.est_traffic)}</td></tr>`).join(""), [1, 2, 3])
+        : table(["Competitor", "Keywords Ranked For"],
+            rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td></tr>`).join(""), [1])
+          + `<p class="muted small">Discovered via live web search${d.candidateSource ? ` (${esc(d.candidateSource)})` : ""}: domains appearing in top results across the keyword shortlist.</p>`}`));
+  }
 
+  if (hasAuthority) {
     const compRows = [
       { domain: site, ...(d.siteBacklinks || {}), ...(d.siteRank || {}), dr: d.dr?.[site], self: true },
       ...(d.compData || []).map((c) => ({ ...c, dr: d.dr?.[c.domain] })),
@@ -212,7 +220,8 @@ export function renderReport(cfg, d) {
 
   const navItems = [["summary", "Summary"], ["technical", "Technical"], ["onpage", "On-Page"],
     ...(hasKwData ? [["keywords", "Keywords"]] : []),
-    ...(hasCompData ? [["competitors", "Competitors"], ["comparison", "Authority"]] : []),
+    ...(hasCandidates ? [["competitors", "Competitors"]] : []),
+    ...(hasAuthority ? [["comparison", "Authority"]] : []),
     ["ai", "AI Visibility"], ["plan", "Action Plan"], ["next", "Next Steps"]];
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
