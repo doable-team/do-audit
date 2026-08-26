@@ -22,27 +22,37 @@ export async function understand(cfg, home, pages) {
     }), 2000);
 }
 
-export async function strategy(cfg, { business, brand, market, ranked, candidates, hasData }) {
+export async function strategy(cfg, { business, brand, market, ranked, candidates, force }) {
+  // Branch on whether each data set actually has rows — a configured
+  // DataForSEO key with zero results (new/small sites) must behave like
+  // having no data, or the never-invent-data rule makes the LLM return
+  // an empty strategy.
+  const hasKw = (ranked || []).length > 0;
+  const hasComp = (candidates || []).length > 0;
   return chatJSON(cfg,
     "You are an expert SEO strategist. Reply with strict JSON only. " +
-    "Never invent data; base everything only on the evidence provided.",
+    "Never invent metrics; base metric values only on the evidence provided. " +
+    "Keyword ideas, competitor names and test prompts however MUST always be produced from the " +
+    "business context — an empty shortlist or empty prompts list is never an acceptable answer.",
     JSON.stringify({
-      task: "Given the verified business" + (hasData ? " and its keyword data for the target market" : "") +
+      task: "Given the verified business" + (hasKw || hasComp ? " and its data for the target market" : "") +
         ": (1) pick up to 3 TRUE business competitors " +
-        (hasData
+        (hasComp
           ? "from candidates (exclude marketplaces/media/giants)"
           : "from your knowledge of this business's space (real companies competing for the same customers; " +
             "exclude marketplaces/media/giants)") + "; " +
-        "(2) build a shortlist of exactly 10 MID-TAIL or LONG-TAIL keywords (2+ words, clear intent, no broad " +
+        "(2) build a shortlist of EXACTLY 10 MID-TAIL or LONG-TAIL keywords (2+ words, clear intent, no broad " +
         "head terms) " +
-        (hasData
+        (hasKw
           ? "mixing currently-ranking, striking-distance (rank 4-30) and opportunity terms relevant to the " +
             "target market — carry over each keyword's volume/difficulty/rank from ranked_keywords when present"
-          : "this business should target in its market (no keyword data available — set volume, difficulty " +
-            "and rank to null)") + "; " +
+          : "this business should target in its market (no keyword metrics available — set volume, difficulty " +
+            "and rank to null, but the 10 keywords themselves are REQUIRED)") + "; " +
         "(3) write 5 AI-visibility test prompts via query fan-out, one each: recommendation, comparison, " +
         "informational, local-or-audience, transactional — phrased as a real user would ask an AI assistant, " +
         "NEVER naming the brand itself; (4) list any assumptions, each as a quoted sentence. " +
+        (force ? "IMPORTANT: a previous attempt returned an empty shortlist/prompts — that is invalid. " +
+          "You MUST return exactly 10 keywords and 5 prompts derived from the business description. " : "") +
         "Return {competitors:[domains], shortlist:[{keyword,volume,difficulty,rank}], prompts:[{prompt,category}], assumptions:[]}",
       business, brand,
       target_market: market,

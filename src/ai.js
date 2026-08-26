@@ -217,6 +217,7 @@ export function searchProvider(cfg) {
 // trusted signal (real search results); domains named in the text are a
 // secondary signal. The audited domain and platform noise are dropped.
 const NOISE = /(^|\.)(google|bing|duckduckgo|youtube|facebook|linkedin|x|twitter|instagram|tiktok|wikipedia|reddit|quora|medium|pinterest|amazon|apple|github|g2|capterra|trustpilot|yelp)\./;
+export const isNoiseDomain = (h) => NOISE.test(String(h).toLowerCase() + ".");
 export function extractDomains(text, cited, domain) {
   const found = new Set();
   for (const u of cited || []) {

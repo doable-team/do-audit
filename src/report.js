@@ -145,7 +145,9 @@ export function renderReport(cfg, d) {
           <td class="num">${fmt(k.volume)}</td><td class="num">${fmt(k.difficulty)}</td>
           ${rankCell(serpRank(k.keyword, site) ?? k.rank, true)}
           ${compDomains.map((c) => rankCell(serpRank(k.keyword, c))).join("")}</tr>`).join(""), [1, 2])}
-      <p class="muted small">Volume = monthly Google searches · KD = difficulty (0–100)${d.hasDataForSEO ? ` · Rank data: DataForSEO (live, ${today}, market: ${esc(d.market?.iso || "US")})` : " · No keyword data source configured — keywords are AI-suggested"}</p>`));
+      <p class="muted small">Volume = monthly Google searches · KD = difficulty (0–100)${
+        shortlist.some((k) => k.volume != null) ? "" : " · keyword ideas are AI-suggested (no ranked-keyword data for this site)"}${
+        (d.serpResults || []).length ? ` · Rank data: DataForSEO (live, ${today}, market: ${esc(d.market?.iso || "US")})` : " · no live rank data source configured"}</p>`));
   }
 
   if (hasCandidates) {
@@ -153,7 +155,7 @@ export function renderReport(cfg, d) {
     const rows = chosen.length ? chosen : (d.compCandidates || []).slice(0, 5);
     sections.push(sec("competitors", "Competitive Landscape",
       `<h2>Competitor Research</h2><p class="lead">${esc(a.competitor_summary || "")}</p>
-      ${d.hasDataForSEO
+      ${rows.some((c) => c.organic_keywords != null)
         ? table(["Competitor", "Shared KW", "Organic KW", "Est. Traffic/mo"],
             rows.map((c) => `<tr><td><b>${esc(c.domain)}</b></td><td class="num">${fmt(c.intersections)}</td>
             <td class="num">${fmt(c.organic_keywords)}</td><td class="num">${fmt(c.est_traffic)}</td></tr>`).join(""), [1, 2, 3])
